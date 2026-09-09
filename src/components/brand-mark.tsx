@@ -1,19 +1,28 @@
+import Image from "next/image";
+
 type BrandMarkProps = {
   compact?: boolean;
+  inverse?: boolean;
 };
 
-export function BrandMark({ compact = false }: BrandMarkProps) {
+export function BrandMark({ compact = false, inverse = false }: BrandMarkProps) {
   return (
     <div className="flex items-center gap-3" aria-label="Lectura Aumentada">
-      <span className="grid size-11 place-items-center rounded-[15px] bg-brand text-lg font-black tracking-[-0.08em] text-white shadow-[0_10px_26px_rgba(229,55,52,0.28)]">
-        LA
-      </span>
+      <Image
+        src="/logo-lectura-aumentada.svg"
+        width={116}
+        height={116}
+        alt=""
+        className="size-12 shrink-0 drop-shadow-[0_8px_18px_rgba(229,55,52,0.2)]"
+      />
       {!compact && (
         <span className="leading-tight">
-          <strong className="block text-[1.05rem] font-extrabold text-ink">
+          <strong className={`block text-[1.05rem] font-extrabold ${inverse ? "text-white" : "text-ink"}`}>
             Lectura Aumentada
           </strong>
-          <span className="text-sm font-medium text-muted">Panel docente</span>
+          <span className={`text-sm font-medium ${inverse ? "text-white/70" : "text-muted"}`}>
+            Panel docente
+          </span>
         </span>
       )}
     </div>

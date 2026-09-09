@@ -7,11 +7,8 @@ export default function LoginPage() {
       <section className="relative hidden min-h-screen flex-col justify-between overflow-hidden bg-brand p-12 text-white lg:flex xl:p-16">
         <div className="absolute -right-24 -top-24 size-96 rounded-full border-[72px] border-white/10" />
         <div className="absolute -bottom-28 -left-24 size-[30rem] rounded-full border-[88px] border-white/10" />
-        <div className="relative z-10 flex items-center gap-3">
-          <span className="grid size-12 place-items-center rounded-2xl bg-white text-xl font-black tracking-[-0.08em] text-brand">
-            LA
-          </span>
-          <span className="text-lg font-extrabold">Lectura Aumentada</span>
+        <div className="relative z-10">
+          <BrandMark inverse />
         </div>
 
         <div className="relative z-10 max-w-xl pb-16">
