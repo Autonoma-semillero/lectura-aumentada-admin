@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-labelledby="title">
   <title id="title">Ícono de la aplicación Lectura Aumentada</title>
   <rect width="200" height="200" rx="44" fill="#FFFFFF" />
-  <g transform="translate(33.333 33.333) scale(.66667)">
+  <g>
     <path fill="#E53935" d="M55 60h90a15 15 0 0 1 15 15v60a15 15 0 0 1-15 15H55a15 15 0 0 1-15-15V75a15 15 0 0 1 15-15Z" />
     <path fill="#FFFFFF" fill-opacity=".2" d="M50 60h100v90H50Z" />
     <path fill="none" stroke="#FFFFFF" stroke-width="3" d="M40 140q60 15 120 0" />

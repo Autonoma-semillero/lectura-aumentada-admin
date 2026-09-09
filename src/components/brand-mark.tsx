@@ -13,7 +13,7 @@ export function BrandMark({ compact = false, inverse = false }: BrandMarkProps) 
         width={116}
         height={116}
         alt=""
-        className="size-12 shrink-0 drop-shadow-[0_8px_18px_rgba(229,55,52,0.2)]"
+        className="size-14 shrink-0 drop-shadow-[0_8px_18px_rgba(229,55,52,0.2)]"
       />
       {!compact && (
         <span className="leading-tight">
