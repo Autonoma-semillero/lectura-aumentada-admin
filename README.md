@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lectura Aumentada — Panel docente
 
-## Getting Started
+Dashboard web en Next.js para administrar la experiencia docente de Lectura Aumentada. Consume la misma API que la aplicación Android y mantiene su lenguaje visual: rojo `#E53734`, azul de acciones, fondo cálido, superficies blancas y esquinas amplias.
 
-First, run the development server:
+## Módulos
+
+- Inicio de sesión exclusivo para usuarios con rol `teacher`.
+- Resumen general de estudiantes, temáticas, tarjetas y modelos 3D.
+- Estudiantes con avance total, progreso por temática, tarjetas dominadas y acceso al plan individual.
+- Temáticas: crear, editar, ordenar y eliminar.
+- Tarjetas: filtrar por estudiante/temática, crear, editar, archivar, cargar pronunciación y asociar contenido AR.
+- Planes de estudio Doman: generar, reemplazar, revisar historial y eliminar.
+- Modelos 3D: cargar o reemplazar los modelos GLB asociados a Hiro y Kanji.
+
+## Ejecución local
+
+Requiere Node.js 20.9 o posterior.
 
 ```bash
+npm install
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+La URL del backend ya tiene como valor predeterminado la API desplegada. Para usar otra instancia, cambia `BACKEND_BASE_URL`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Archivos subidos
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+En desarrollo, los archivos se guardan bajo `public/uploads`. Para que los modelos y audios sean persistentes en producción, configura `BLOB_READ_WRITE_TOKEN`; el panel utilizará Vercel Blob y registrará la URL pública en el backend.
 
-## Learn More
+La carga directa de modelos acepta GLB 2.0 de hasta 25 MB. El flujo por URL permite registrar un GLB público existente. Los únicos marcadores físicos soportados por el runtime móvil actual son Hiro y Kanji.
 
-To learn more about Next.js, take a look at the following resources:
+## Validación
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm run build
+```
