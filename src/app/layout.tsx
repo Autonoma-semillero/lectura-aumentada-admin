@@ -13,6 +13,11 @@ export const metadata: Metadata = {
     template: "%s | Lectura Aumentada",
   },
   description: "Gestión docente de Lectura Aumentada.",
+  icons: {
+    icon: "/logo-lectura-aumentada.svg",
+    shortcut: "/logo-lectura-aumentada.svg",
+    apple: "/logo-lectura-aumentada.svg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
