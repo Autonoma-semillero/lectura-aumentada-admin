@@ -159,7 +159,7 @@ export default function HomePage() {
         <section className="hero-scene relative isolate h-[calc(100svh-5.25rem)] overflow-hidden">
           <div className="hero-artwork absolute inset-x-0 bottom-0 z-0 h-[48%] lg:inset-0 lg:h-auto">
             <Image
-              src="/hero-immersive-concept-v4.png"
+              src="/hero-immersive-concept-v4.webp"
               fill
               priority
               sizes="100vw"
