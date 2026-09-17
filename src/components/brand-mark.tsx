@@ -3,9 +3,14 @@ import Image from "next/image";
 type BrandMarkProps = {
   compact?: boolean;
   inverse?: boolean;
+  subtitle?: string;
 };
 
-export function BrandMark({ compact = false, inverse = false }: BrandMarkProps) {
+export function BrandMark({
+  compact = false,
+  inverse = false,
+  subtitle = "Panel docente",
+}: BrandMarkProps) {
   return (
     <div className="flex items-center gap-3" aria-label="Lectura Aumentada">
       <Image
@@ -21,7 +26,7 @@ export function BrandMark({ compact = false, inverse = false }: BrandMarkProps) 
             Lectura Aumentada
           </strong>
           <span className={`text-sm font-medium ${inverse ? "text-white/70" : "text-muted"}`}>
-            Panel docente
+            {subtitle}
           </span>
         </span>
       )}

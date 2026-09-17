@@ -5,6 +5,17 @@ export type Student = {
   email: string;
 };
 
+export type User = {
+  id: string;
+  email: string;
+  username?: string;
+  display_name?: string;
+  roles: Array<"student" | "teacher" | "admin">;
+  status?: "active" | "disabled" | "pending";
+  created_at: string;
+  updated_at: string;
+};
+
 export type Category = {
   id: string;
   name: string;
@@ -66,8 +77,44 @@ export type DailyPlan = {
   target_cards_count: number;
   target_sessions_count: number;
   category_id: string;
+  study_plan_id?: string;
+  study_plan_level_id?: string;
   algorithm_version?: string;
   notes?: string;
+};
+
+export type StudyPlanStatus = "draft" | "active" | "paused" | "completed" | "archived";
+
+export type StudyPlanCategory = {
+  category_id: string;
+  word_card_ids: string[];
+};
+
+export type StudyPlanLevel = {
+  id: string;
+  name: string;
+  order_index: number;
+  start_date: string;
+  end_date: string;
+  categories: StudyPlanCategory[];
+};
+
+export type StudyPlan = {
+  id: string;
+  name: string;
+  description?: string;
+  student_id: string;
+  start_date: string;
+  end_date: string;
+  sessions_per_day: number;
+  display_ms: number;
+  audio_mode: "auto" | "manual" | "disabled";
+  mode: "manual" | "auto";
+  status: StudyPlanStatus;
+  levels: StudyPlanLevel[];
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type DailyPlanSummary = {
@@ -78,6 +125,22 @@ export type DailyPlanSummary = {
   completed_sessions_count: number;
   pending_sessions_count: number;
   next_session_id?: string | null;
+};
+
+export type DomanSession = {
+  id: string;
+  student_id: string;
+  daily_plan_id: string;
+  session_index: number;
+  category_id: string;
+  display_ms: number;
+  audio_mode: "auto" | "manual" | "disabled";
+  status: "planned" | "in_progress" | "completed" | "cancelled";
+  mode?: "manual" | "auto";
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ArModel = {
