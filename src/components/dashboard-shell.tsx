@@ -14,6 +14,7 @@ import {
   Shapes,
   UserCog,
   Users,
+  UsersRound,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -24,6 +25,7 @@ type Profile = { email: string; display_name?: string };
 const navigation: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
   { href: "/dashboard/students", label: "Estudiantes", icon: Users },
+  { href: "/dashboard/groups", label: "Grupos", icon: UsersRound },
   { href: "/dashboard/users", label: "Usuarios", icon: UserCog },
   { href: "/dashboard/themes", label: "Temáticas", icon: Shapes },
   { href: "/dashboard/cards", label: "Tarjetas", icon: BookOpenText },
