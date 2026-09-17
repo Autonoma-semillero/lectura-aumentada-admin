@@ -38,15 +38,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const isTeacher = payload.user.roles.includes("teacher");
-    if (!isTeacher) {
+    const canUseDashboard = payload.user.roles.some(
+      (role) => role === "teacher" || role === "admin",
+    );
+    if (!canUseDashboard) {
       await fetch(getBackendUrl("auth/logout"), {
         method: "POST",
         headers: { Authorization: `Bearer ${payload.accessToken}` },
         cache: "no-store",
       }).catch(() => undefined);
       return NextResponse.json(
-        { message: "Este panel es exclusivo para profesores." },
+        { message: "Este panel es exclusivo para profesores y administradores." },
         { status: 403 },
       );
     }

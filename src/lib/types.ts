@@ -5,6 +5,47 @@ export type Student = {
   email: string;
 };
 
+export type StudentAudienceItem = {
+  type: "student";
+  audience_key: string;
+  id: string;
+  display_name?: string;
+  email: string;
+  username?: string;
+  group_ids: string[];
+  unassigned: boolean;
+};
+
+export type GroupAudienceItem = {
+  type: "group";
+  audience_key: string;
+  id: string;
+  name: string;
+  description?: string;
+  teacher_id: string;
+  status: "active" | "archived";
+  student_ids: string[];
+};
+
+export type AudienceSearchItem = StudentAudienceItem | GroupAudienceItem;
+
+export type AudienceSearchResponse = {
+  items: AudienceSearchItem[];
+};
+
+export type StudentGroup = {
+  id: string;
+  name: string;
+  normalized_name: string;
+  description?: string;
+  teacher_id: string;
+  status: "active" | "archived";
+  created_by: string;
+  student_ids: string[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type User = {
   id: string;
   email: string;
@@ -87,7 +128,9 @@ export type StudyPlanStatus = "draft" | "active" | "paused" | "completed" | "arc
 
 export type StudyPlanCategory = {
   category_id: string;
-  word_card_ids: string[];
+  target_cards_count?: number;
+  /** Compatibilidad de lectura con planes creados antes de la audiencia v2. */
+  word_card_ids?: string[];
 };
 
 export type StudyPlanLevel = {
@@ -103,7 +146,13 @@ export type StudyPlan = {
   id: string;
   name: string;
   description?: string;
-  student_id: string;
+  group_ids: string[];
+  direct_student_ids: string[];
+  student_ids: string[];
+  students: StudyPlanAudienceStudent[];
+  /** Campo legado: los planes v2 usan la fotografía de audiencia anterior. */
+  student_id?: string;
+  schema_version: number;
   start_date: string;
   end_date: string;
   sessions_per_day: number;
@@ -117,6 +166,18 @@ export type StudyPlan = {
   updated_at: string;
 };
 
+export type StudyPlanAudienceSource =
+  | { type: "direct" }
+  | { type: "group"; group_id: string };
+
+export type StudyPlanAudienceStudent = {
+  student_id: string;
+  display_name?: string;
+  email?: string;
+  username?: string;
+  sources: StudyPlanAudienceSource[];
+};
+
 export type DailyPlanSummary = {
   plan: DailyPlan;
   cards_count: number;
@@ -125,6 +186,24 @@ export type DailyPlanSummary = {
   completed_sessions_count: number;
   pending_sessions_count: number;
   next_session_id?: string | null;
+};
+
+export type GenerateStudyPlanDayResult = {
+  student_id: string;
+  category_id: string;
+  status: "generated" | "existing" | "failed";
+  error?: string;
+  plan?: DailyPlanSummary;
+};
+
+export type GenerateStudyPlanDayResponse = {
+  summary: {
+    total: number;
+    generated: number;
+    existing: number;
+    failed: number;
+  };
+  results: GenerateStudyPlanDayResult[];
 };
 
 export type DomanSession = {

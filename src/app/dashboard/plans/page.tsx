@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   CalendarDays,
+  Check,
   ChevronDown,
   ChevronUp,
   Clock3,
@@ -14,27 +15,36 @@ import {
   RefreshCcw,
   RotateCcw,
   Save,
+  Search,
   Trash2,
   UserRound,
+  Users,
   X,
 } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui-kit";
 import { apiFetch } from "@/lib/api-client";
 import type {
+  AudienceSearchItem,
+  AudienceSearchResponse,
   Category,
   DailyPlan,
   DailyPlanSummary,
   DomanSession,
+  GenerateStudyPlanDayResponse,
+  GroupAudienceItem,
   Student,
+  StudentAudienceItem,
   StudyPlan,
+  StudyPlanAudienceStudent,
   StudyPlanStatus,
-  WordCard,
 } from "@/lib/types";
 import { studentName } from "@/lib/types";
 
 type LevelCategoryDraft = {
   categoryId: string;
-  wordCardIds: string[];
+  targetCardsCount: number;
+  mode: "legacy" | "target";
+  legacyWordCardIds?: string[];
 };
 
 type LevelDraft = {
@@ -50,7 +60,10 @@ type StudyPlanDraft = {
   id?: string;
   name: string;
   description: string;
-  studentId: string;
+  groupIds: string[];
+  directStudentIds: string[];
+  resolvedStudentIds: string[];
+  audienceStudents: StudyPlanAudienceStudent[];
   startDate: string;
   endDate: string;
   sessionsPerDay: number;
@@ -83,16 +96,23 @@ const planStatusLabel: Record<StudyPlanStatus, string> = {
   archived: "Archivado",
 };
 
+const MAX_PLAN_AUDIENCE_STUDENTS = 50;
+const MAX_PLAN_DAY_JOBS = 100;
+const MAX_PLAN_DAY_SESSION_CARDS = 10_000;
+
 export default function PlansPage() {
   const [students, setStudents] = useState<Student[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [studentId, setStudentId] = useState("");
+  const [executionStudentId, setExecutionStudentId] = useState("");
   const [studyPlans, setStudyPlans] = useState<StudyPlan[] | null>(null);
   const [dailyPlans, setDailyPlans] = useState<DailyPlan[] | null>(null);
   const [draft, setDraft] = useState<StudyPlanDraft | null>(null);
   const [categoryToAdd, setCategoryToAdd] = useState<Record<string, string>>({});
-  const [cardsByKey, setCardsByKey] = useState<Record<string, WordCard[]>>({});
-  const [loadingCardKeys, setLoadingCardKeys] = useState<string[]>([]);
+  const [audienceQuery, setAudienceQuery] = useState("");
+  const [audienceResults, setAudienceResults] = useState<AudienceSearchItem[]>([]);
+  const [selectedAudienceItems, setSelectedAudienceItems] = useState<AudienceSearchItem[]>([]);
+  const [isAudienceSearching, setIsAudienceSearching] = useState(false);
+  const [audienceError, setAudienceError] = useState<string | null>(null);
   const [sessionsByPlan, setSessionsByPlan] = useState<Record<string, DomanSession[]>>({});
   const [expandedPlanIds, setExpandedPlanIds] = useState<string[]>([]);
   const [editingSession, setEditingSession] = useState<SessionDraft | null>(null);
@@ -108,7 +128,18 @@ export default function PlansPage() {
     [categories],
   );
 
-  async function loadFilters() {
+  const studentsById = useMemo(
+    () => new Map((students ?? []).map((student) => [student.id, student])),
+    [students],
+  );
+
+  const isCreatingPlan = draft !== null && draft.id === undefined;
+  const selectedResolvedStudentIds = useMemo(
+    () => resolveAudienceStudentIds(selectedAudienceItems),
+    [selectedAudienceItems],
+  );
+
+  const loadFilters = useCallback(async () => {
     setError(null);
     try {
       const [nextStudents, nextCategories] = await Promise.all([
@@ -118,43 +149,78 @@ export default function PlansPage() {
       setStudents(nextStudents);
       setCategories(nextCategories);
       const requestedStudent = new URLSearchParams(window.location.search).get("student");
-      setStudentId((current) => current || requestedStudent || nextStudents[0]?.id || "");
+      setExecutionStudentId((current) => current || requestedStudent || nextStudents[0]?.id || "");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible cargar la información.");
     }
-  }
+  }, []);
 
-  const loadPlans = useCallback(async () => {
-    if (!studentId) {
-      setStudyPlans([]);
+  const loadStudyPlans = useCallback(async () => {
+    setStudyPlans(null);
+    setError(null);
+    try {
+      setStudyPlans(await apiFetch<StudyPlan[]>("doman/study-plans"));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No fue posible cargar los planes maestros.");
+    }
+  }, []);
+
+  const loadExecutionPlans = useCallback(async () => {
+    if (!executionStudentId) {
       setDailyPlans([]);
+      setSessionsByPlan({});
+      setExpandedPlanIds([]);
       return;
     }
-    setStudyPlans(null);
     setDailyPlans(null);
     setSessionsByPlan({});
     setExpandedPlanIds([]);
     setError(null);
     try {
-      const encodedStudentId = encodeURIComponent(studentId);
-      const [nextStudyPlans, nextDailyPlans] = await Promise.all([
-        apiFetch<StudyPlan[]>(`doman/study-plans?student_id=${encodedStudentId}`),
-        apiFetch<DailyPlan[]>(`doman/daily-plans?student_id=${encodedStudentId}`),
-      ]);
-      setStudyPlans(nextStudyPlans);
-      setDailyPlans(nextDailyPlans);
+      setDailyPlans(
+        await apiFetch<DailyPlan[]>(
+          `doman/daily-plans?student_id=${encodeURIComponent(executionStudentId)}`,
+        ),
+      );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No fue posible cargar los planes.");
+      setError(cause instanceof Error ? cause.message : "No fue posible cargar la ejecución del estudiante.");
     }
-  }, [studentId]);
+  }, [executionStudentId]);
 
   useEffect(() => {
-    void Promise.resolve().then(loadFilters);
-  }, []);
+    void Promise.resolve().then(() => Promise.all([loadFilters(), loadStudyPlans()]));
+  }, [loadFilters, loadStudyPlans]);
 
   useEffect(() => {
-    void Promise.resolve().then(loadPlans);
-  }, [loadPlans]);
+    void Promise.resolve().then(loadExecutionPlans);
+  }, [loadExecutionPlans]);
+
+  useEffect(() => {
+    if (!isCreatingPlan) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void apiFetch<AudienceSearchResponse>(
+        `groups/audience/search?q=${encodeURIComponent(audienceQuery.trim())}&limit=50`,
+        { signal: controller.signal },
+      )
+        .then((response) => {
+          setAudienceResults(response.items);
+          setAudienceError(null);
+        })
+        .catch((cause: unknown) => {
+          if (controller.signal.aborted) return;
+          setAudienceError(cause instanceof Error ? cause.message : "No fue posible buscar la audiencia.");
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setIsAudienceSearching(false);
+        });
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [audienceQuery, isCreatingPlan]);
 
   function newStudyPlanDraft(): StudyPlanDraft {
     const startDate = todayInputDate();
@@ -162,7 +228,10 @@ export default function PlansPage() {
     return {
       name: "",
       description: "",
-      studentId,
+      groupIds: [],
+      directStudentIds: [],
+      resolvedStudentIds: [],
+      audienceStudents: [],
       startDate,
       endDate,
       sessionsPerDay: 5,
@@ -174,12 +243,45 @@ export default function PlansPage() {
     };
   }
 
+  function openNewStudyPlan() {
+    setDraft(newStudyPlanDraft());
+    setSelectedAudienceItems([]);
+    setAudienceQuery("");
+    setAudienceResults([]);
+    setAudienceError(null);
+    setIsAudienceSearching(true);
+    setFormError(null);
+  }
+
+  function closeStudyPlan() {
+    setDraft(null);
+    setSelectedAudienceItems([]);
+    setAudienceQuery("");
+    setAudienceResults([]);
+    setAudienceError(null);
+    setIsAudienceSearching(false);
+    setFormError(null);
+  }
+
   function editStudyPlan(plan: StudyPlan) {
+    const legacyStudentIds = plan.student_id ? [plan.student_id] : [];
+    const resolvedStudentIds = uniqueStrings([
+      ...(plan.student_ids ?? []),
+      ...(plan.students ?? []).map((student) => student.student_id),
+      ...legacyStudentIds,
+    ]);
     const nextDraft: StudyPlanDraft = {
       id: plan.id,
       name: plan.name,
       description: plan.description ?? "",
-      studentId: plan.student_id,
+      groupIds: plan.group_ids ?? [],
+      directStudentIds: plan.direct_student_ids?.length
+        ? plan.direct_student_ids
+        : legacyStudentIds,
+      resolvedStudentIds,
+      audienceStudents: plan.students?.length
+        ? plan.students
+        : resolvedStudentIds.map((studentId) => ({ student_id: studentId, sources: [] })),
       startDate: inputDate(plan.start_date),
       endDate: inputDate(plan.end_date),
       sessionsPerDay: plan.sessions_per_day,
@@ -193,54 +295,133 @@ export default function PlansPage() {
         name: level.name,
         startDate: inputDate(level.start_date),
         endDate: inputDate(level.end_date),
-        categories: level.categories.map((category) => ({
-          categoryId: category.category_id,
-          wordCardIds: [...category.word_card_ids],
-        })),
+        categories: level.categories.map((category) => {
+          const legacyWordCardIds = Array.isArray(category.word_card_ids)
+            ? [...category.word_card_ids]
+            : undefined;
+          return {
+            categoryId: category.category_id,
+            targetCardsCount: categoryTargetCardsCount(category),
+            mode: legacyWordCardIds === undefined ? "target" : "legacy",
+            legacyWordCardIds,
+          };
+        }),
       })),
     };
     setDraft(nextDraft);
+    setSelectedAudienceItems([]);
+    setAudienceQuery("");
+    setAudienceResults([]);
+    setAudienceError(null);
+    setIsAudienceSearching(false);
     setFormError(null);
-    for (const level of nextDraft.levels) {
-      for (const category of level.categories) {
-        void loadCards(nextDraft.studentId, category.categoryId);
-      }
-    }
   }
 
-  async function loadCards(targetStudentId: string, categoryId: string): Promise<WordCard[]> {
-    const key = cardKey(targetStudentId, categoryId);
-    if (cardsByKey[key]) return cardsByKey[key];
-    setLoadingCardKeys((current) => (current.includes(key) ? current : [...current, key]));
-    try {
-      const cards = await apiFetch<WordCard[]>(
-        `word-cards?student_id=${encodeURIComponent(targetStudentId)}&category_id=${encodeURIComponent(categoryId)}`,
-      );
-      setCardsByKey((current) => ({ ...current, [key]: cards }));
-      return cards;
-    } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : "No fue posible cargar las tarjetas.");
-      return [];
-    } finally {
-      setLoadingCardKeys((current) => current.filter((item) => item !== key));
-    }
+  function changeAudienceQuery(value: string) {
+    setAudienceQuery(value);
+    setAudienceError(null);
+    setIsAudienceSearching(true);
   }
 
-  function changeDraftStudent(nextStudentId: string) {
-    if (!draft) return;
-    const hasSelections = draft.levels.some((level) => level.categories.length > 0);
+  function isAudienceSelected(item: AudienceSearchItem): boolean {
+    if (!draft) return false;
+    return item.type === "group"
+      ? draft.groupIds.includes(item.id)
+      : draft.directStudentIds.includes(item.id);
+  }
+
+  function toggleAudienceItem(item: AudienceSearchItem) {
+    if (!draft || draft.id) return;
+    const selected = isAudienceSelected(item);
+    const nextSelectedItems = selected
+      ? selectedAudienceItems.filter(
+          (selectedItem) =>
+            selectedItem.type !== item.type || selectedItem.id !== item.id,
+        )
+      : [
+          ...selectedAudienceItems.filter(
+            (selectedItem) =>
+              selectedItem.type !== item.type || selectedItem.id !== item.id,
+          ),
+          item,
+        ];
+
     if (
-      hasSelections &&
-      !window.confirm("Al cambiar de estudiante se quitarán las categorías y tarjetas seleccionadas. ¿Continuar?")
+      !selected &&
+      resolveAudienceStudentIds(nextSelectedItems).length > MAX_PLAN_AUDIENCE_STUDENTS
     ) {
+      setFormError(
+        `La audiencia resuelta no puede superar ${MAX_PLAN_AUDIENCE_STUDENTS} estudiantes.`,
+      );
       return;
     }
+
     setDraft({
       ...draft,
-      studentId: nextStudentId,
-      levels: draft.levels.map((level) => ({ ...level, categories: [] })),
+      groupIds:
+        item.type === "group"
+          ? selected
+            ? draft.groupIds.filter((id) => id !== item.id)
+            : [...draft.groupIds, item.id]
+          : draft.groupIds,
+      directStudentIds:
+        item.type === "student"
+          ? selected
+            ? draft.directStudentIds.filter((id) => id !== item.id)
+            : [...draft.directStudentIds, item.id]
+          : draft.directStudentIds,
     });
-    setCardsByKey({});
+    setSelectedAudienceItems(nextSelectedItems);
+    setFormError(null);
+  }
+
+  function selectAllStudents() {
+    if (!draft || draft.id || !students?.length) return;
+
+    const knownStudentItems = new Map<string, StudentAudienceItem>();
+    for (const item of [...audienceResults, ...selectedAudienceItems]) {
+      if (item.type === "student") knownStudentItems.set(item.id, item);
+    }
+
+    const allStudentItems = [
+      ...new Map(
+        students.map(
+          (student) =>
+            [
+              student.id,
+              knownStudentItems.get(student.id) ?? toStudentAudienceItem(student),
+            ] as const,
+        ),
+      ).values(),
+    ];
+    const selectedGroups = selectedAudienceItems.filter(
+      (item): item is GroupAudienceItem => item.type === "group",
+    );
+    const nextSelectedItems: AudienceSearchItem[] = [...selectedGroups, ...allStudentItems];
+    const resolvedStudentCount = resolveAudienceStudentIds(nextSelectedItems).length;
+
+    if (resolvedStudentCount > MAX_PLAN_AUDIENCE_STUDENTS) {
+      setFormError(
+        `No es posible seleccionar todos: la audiencia resuelta tendría ${resolvedStudentCount} estudiantes y el máximo es ${MAX_PLAN_AUDIENCE_STUDENTS}.`,
+      );
+      return;
+    }
+
+    setDraft({
+      ...draft,
+      directStudentIds: allStudentItems.map((item) => item.id),
+    });
+    setSelectedAudienceItems(nextSelectedItems);
+    setFormError(null);
+  }
+
+  function clearDirectStudents() {
+    if (!draft || draft.id) return;
+    setDraft({ ...draft, directStudentIds: [] });
+    setSelectedAudienceItems((current) =>
+      current.filter((item): item is GroupAudienceItem => item.type === "group"),
+    );
+    setFormError(null);
   }
 
   function patchLevel(clientId: string, patch: Partial<LevelDraft>) {
@@ -268,15 +449,17 @@ export default function PlansPage() {
     setDraft({ ...draft, levels: draft.levels.filter((level) => level.clientId !== clientId) });
   }
 
-  async function addCategory(level: LevelDraft) {
+  function addCategory(level: LevelDraft) {
     if (!draft) return;
     const categoryId = categoryToAdd[level.clientId] ?? "";
     if (!categoryId || level.categories.some((item) => item.categoryId === categoryId)) return;
     patchLevel(level.clientId, {
-      categories: [...level.categories, { categoryId, wordCardIds: [] }],
+      categories: [
+        ...level.categories,
+        { categoryId, targetCardsCount: 5, mode: "target" },
+      ],
     });
     setCategoryToAdd((current) => ({ ...current, [level.clientId]: "" }));
-    await loadCards(draft.studentId, categoryId);
   }
 
   function removeCategory(level: LevelDraft, categoryId: string) {
@@ -285,36 +468,94 @@ export default function PlansPage() {
     });
   }
 
-  function setCategoryCards(level: LevelDraft, categoryId: string, wordCardIds: string[]) {
+  function setCategoryTarget(level: LevelDraft, categoryId: string, targetCardsCount: number) {
     patchLevel(level.clientId, {
       categories: level.categories.map((category) =>
-        category.categoryId === categoryId ? { ...category, wordCardIds } : category,
+        category.categoryId === categoryId ? { ...category, targetCardsCount } : category,
       ),
     });
   }
 
-  function toggleCard(level: LevelDraft, categoryId: string, cardId: string) {
-    const category = level.categories.find((item) => item.categoryId === categoryId);
-    if (!category) return;
-    const selected = category.wordCardIds.includes(cardId)
-      ? category.wordCardIds.filter((id) => id !== cardId)
-      : [...category.wordCardIds, cardId];
-    setCategoryCards(level, categoryId, selected);
+  function setCategoryMode(
+    level: LevelDraft,
+    categoryId: string,
+    mode: LevelCategoryDraft["mode"],
+  ) {
+    patchLevel(level.clientId, {
+      categories: level.categories.map((category) =>
+        category.categoryId === categoryId ? { ...category, mode } : category,
+      ),
+    });
   }
 
   async function saveStudyPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
+    if (!draft.id && draft.groupIds.length === 0 && draft.directStudentIds.length === 0) {
+      setFormError("Selecciona al menos un grupo o estudiante para la audiencia.");
+      return;
+    }
+    if (!draft.id && selectedResolvedStudentIds.length === 0) {
+      setFormError("La audiencia seleccionada no contiene estudiantes.");
+      return;
+    }
+    if (!draft.id && selectedResolvedStudentIds.length > MAX_PLAN_AUDIENCE_STUDENTS) {
+      setFormError(
+        `La audiencia resuelta no puede superar ${MAX_PLAN_AUDIENCE_STUDENTS} estudiantes.`,
+      );
+      return;
+    }
     if (draft.levels.some((level) => level.categories.length === 0)) {
       setFormError("Cada nivel debe incluir al menos una categoría.");
       return;
     }
     if (
       draft.levels.some((level) =>
-        level.categories.some((category) => category.wordCardIds.length === 0),
+        level.categories.some(
+          (category) =>
+            category.mode === "target" &&
+            (category.targetCardsCount < 1 || category.targetCardsCount > 50),
+        ),
       )
     ) {
-      setFormError("Selecciona al menos una tarjeta en cada categoría.");
+      setFormError("La cantidad objetivo de cada categoría debe estar entre 1 y 50 tarjetas.");
+      return;
+    }
+
+    const audienceStudentCount = draft.id
+      ? draft.resolvedStudentIds.length
+      : selectedResolvedStudentIds.length;
+    const oversizedLevel = draft.levels.find((level) => {
+      const jobs = audienceStudentCount * level.categories.length;
+      const cardsPerStudent = level.categories.reduce(
+        (total, category) =>
+          total +
+          (category.mode === "legacy"
+            ? (category.legacyWordCardIds?.length ?? category.targetCardsCount)
+            : category.targetCardsCount),
+        0,
+      );
+      const sessionCards =
+        audienceStudentCount * draft.sessionsPerDay * cardsPerStudent;
+      return jobs > MAX_PLAN_DAY_JOBS || sessionCards > MAX_PLAN_DAY_SESSION_CARDS;
+    });
+    if (oversizedLevel) {
+      const jobs = audienceStudentCount * oversizedLevel.categories.length;
+      const cardsPerStudent = oversizedLevel.categories.reduce(
+        (total, category) =>
+          total +
+          (category.mode === "legacy"
+            ? (category.legacyWordCardIds?.length ?? category.targetCardsCount)
+            : category.targetCardsCount),
+        0,
+      );
+      const sessionCards =
+        audienceStudentCount * draft.sessionsPerDay * cardsPerStudent;
+      setFormError(
+        jobs > MAX_PLAN_DAY_JOBS
+          ? `El nivel “${oversizedLevel.name || "Sin nombre"}” genera ${jobs} combinaciones estudiante-categoría; el máximo es ${MAX_PLAN_DAY_JOBS}. Reduce la audiencia o las categorías.`
+          : `El nivel “${oversizedLevel.name || "Sin nombre"}” generaría ${sessionCards} asignaciones de tarjetas por día; el máximo es ${MAX_PLAN_DAY_SESSION_CARDS}. Reduce la audiencia, sesiones o tarjetas.`,
+      );
       return;
     }
 
@@ -324,7 +565,12 @@ export default function PlansPage() {
       const payload = {
         name: draft.name.trim(),
         description: draft.description.trim() || undefined,
-        student_id: draft.studentId,
+        ...(!draft.id
+          ? {
+              group_ids: draft.groupIds,
+              student_ids: draft.directStudentIds,
+            }
+          : {}),
         start_date: draft.startDate,
         end_date: draft.endDate,
         sessions_per_day: draft.sessionsPerDay,
@@ -338,23 +584,16 @@ export default function PlansPage() {
           order_index: index + 1,
           start_date: level.startDate,
           end_date: level.endDate,
-          categories: level.categories.map((category) => ({
-            category_id: category.categoryId,
-            word_card_ids: category.wordCardIds,
-          })),
+          categories: level.categories.map(toStudyPlanCategoryPayload),
         })),
       };
       await apiFetch(draft.id ? `doman/study-plans/${draft.id}` : "doman/study-plans", {
         method: draft.id ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
-      setDraft(null);
+      closeStudyPlan();
       setNotice(draft.id ? "El plan de estudio fue actualizado." : "El plan de estudio fue creado.");
-      if (draft.studentId !== studentId) {
-        setStudentId(draft.studentId);
-      } else {
-        await loadPlans();
-      }
+      await loadStudyPlans();
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : "No fue posible guardar el plan.");
     } finally {
@@ -366,14 +605,17 @@ export default function PlansPage() {
     setBusyKey(`generate-${plan.id}`);
     setNotice(null);
     try {
-      const generated = await apiFetch<DailyPlanSummary[]>(
+      const generated = await apiFetch<GenerateStudyPlanDayResponse | DailyPlanSummary[]>(
         `doman/study-plans/${plan.id}/generate-day`,
         { method: "POST", body: JSON.stringify({}) },
       );
+      const summary = normalizeGenerateDaySummary(generated);
+      const ready = summary.generated + summary.existing;
       setNotice(
-        `Se prepararon ${generated.length} ${generated.length === 1 ? "bloque" : "bloques"} de sesiones para hoy.`,
+        `${ready} de ${summary.total} bloques diarios quedaron listos` +
+          (summary.failed > 0 ? `; ${summary.failed} fallaron.` : "."),
       );
-      await loadPlans();
+      await Promise.all([loadStudyPlans(), loadExecutionPlans()]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible generar las sesiones de hoy.");
     } finally {
@@ -387,7 +629,7 @@ export default function PlansPage() {
     try {
       await apiFetch(`doman/study-plans/${plan.id}`, { method: "DELETE" });
       setNotice("El plan quedó archivado.");
-      await loadPlans();
+      await loadStudyPlans();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible archivar el plan.");
     } finally {
@@ -575,56 +817,50 @@ export default function PlansPage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Método Doman"
-        title="Planes de estudio"
-        description="Diseña planes duraderos por estudiante, organiza niveles y elige exactamente las categorías y tarjetas de cada etapa."
+        title="Planes maestros"
+        description="Diseña una programación común para grupos y estudiantes directos, organiza sus niveles y define cuántas tarjetas trabajará cada categoría."
         action={
           <button
             className="inline-flex h-12 items-center gap-2 rounded-2xl bg-brand px-5 font-extrabold text-white disabled:opacity-50"
-            onClick={() => {
-              setDraft(newStudyPlanDraft());
-              setFormError(null);
-            }}
-            disabled={!studentId}
+            onClick={openNewStudyPlan}
+            disabled={categories.length === 0}
           >
             <Plus className="size-5" /> Nuevo plan
           </button>
         }
       />
 
-      <section className="flex flex-col gap-4 rounded-[26px] border border-line bg-white p-5 sm:flex-row sm:items-end sm:justify-between">
-        <label className="block w-full max-w-md space-y-2">
-          <span className="text-sm font-bold text-ink-soft">Gestionar planes de</span>
-          <select className="field" value={studentId} onChange={(event) => setStudentId(event.target.value)}>
-            {students?.map((student) => (
-              <option key={student.id} value={student.id}>{studentName(student)}</option>
-            ))}
-          </select>
-        </label>
-        <div className="flex items-center gap-2 text-sm font-semibold text-muted">
-          <UserRound className="size-4 text-brand" /> Cada plan pertenece a un estudiante.
-        </div>
-      </section>
-
       {notice && <p className="rounded-2xl border border-green-200 bg-green-50 p-4 font-semibold text-green-800">{notice}</p>}
-      {!students && !error && <LoadingState label="Cargando estudiantes y planes…" />}
-      {error && <ErrorState message={error} onRetry={loadPlans} />}
+      {!students && !error && <LoadingState label="Cargando estudiantes, categorías y planes…" />}
+      {error && (
+        <ErrorState
+          message={error}
+          onRetry={() => void Promise.all([loadFilters(), loadStudyPlans(), loadExecutionPlans()])}
+        />
+      )}
 
-      {students && (
-        <section className="space-y-4">
+      <section className="space-y-4">
           <div>
-            <h2 className="text-2xl font-black text-ink">Planes configurados</h2>
-            <p className="mt-1 text-sm text-muted">El valor predeterminado es 5 sesiones por día y puedes cambiarlo en cada plan.</p>
+            <h2 className="text-2xl font-black text-ink">Todos los planes maestros</h2>
+            <p className="mt-1 text-sm text-muted">La audiencia queda guardada como una fotografía inmutable; los cambios futuros de un grupo no alteran el plan existente.</p>
           </div>
           {studyPlans === null && <LoadingState label="Cargando planes de estudio…" />}
           {studyPlans?.length === 0 && (
-            <EmptyState title="Aún no hay un plan de estudio" description="Crea el primero y agrega sus niveles, categorías y tarjetas." />
+            <EmptyState title="Aún no hay planes maestros" description="Crea el primero, combina grupos y estudiantes, y configura sus niveles." />
           )}
           <div className="grid gap-4 lg:grid-cols-2">
             {studyPlans?.map((plan) => {
               const cardsCount = plan.levels.reduce(
-                (total, level) => total + level.categories.reduce((subtotal, category) => subtotal + category.word_card_ids.length, 0),
+                (total, level) =>
+                  total +
+                  level.categories.reduce(
+                    (subtotal, category) => subtotal + categoryTargetCardsCount(category),
+                    0,
+                  ),
                 0,
               );
+              const audienceStudentIds = studyPlanStudentIds(plan);
+              const directStudentIds = studyPlanDirectStudentIds(plan);
               return (
                 <article key={plan.id} className="rounded-[28px] border border-line bg-white p-6 shadow-[0_10px_35px_rgba(15,23,42,0.04)]">
                   <div className="flex items-start justify-between gap-4">
@@ -637,11 +873,12 @@ export default function PlansPage() {
                     </div>
                     <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-brand-soft text-brand"><Layers3 className="size-5" /></span>
                   </div>
-                  <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                  <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
                     <PlanFact icon={<CalendarDays className="size-4" />} label={`${dateLabel(plan.start_date)} – ${dateLabel(plan.end_date)}`} />
+                    <PlanFact icon={<Users className="size-4" />} label={`${audienceStudentIds.length} estudiantes · ${(plan.group_ids ?? []).length} grupos + ${directStudentIds.length} directos`} />
                     <PlanFact icon={<RotateCcw className="size-4" />} label={`${plan.sessions_per_day} sesiones/día`} />
                     <PlanFact icon={<Clock3 className="size-4" />} label={`${(plan.display_ms / 1000).toFixed(1)} s por tarjeta`} />
-                    <PlanFact icon={<ListChecks className="size-4" />} label={`${plan.levels.length} niveles · ${cardsCount} selecciones`} />
+                    <PlanFact icon={<ListChecks className="size-4" />} label={`${plan.levels.length} niveles · ${cardsCount} tarjetas objetivo`} />
                   </div>
                   <div className="mt-5 space-y-2 rounded-2xl bg-canvas p-4">
                     {plan.levels.map((level) => (
@@ -665,20 +902,37 @@ export default function PlansPage() {
             })}
           </div>
         </section>
-      )}
 
       {students && (
         <section className="space-y-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-ink">Días y sesiones generadas</h2>
-              <p className="mt-1 text-sm text-muted">Añade, edita, restaura o elimina sesiones de un día específico o de todos los días visibles.</p>
+              <h2 className="text-2xl font-black text-ink">Ejecución individual: días y sesiones</h2>
+              <p className="mt-1 text-sm text-muted">Elige un estudiante únicamente para inspeccionar y administrar sus días ya generados.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button className="inline-flex h-10 items-center gap-2 rounded-xl bg-action-soft px-4 text-sm font-extrabold text-action disabled:opacity-50" disabled={!dailyPlans?.length || busyKey !== null} onClick={() => void runAllDaysAction("restore")}><RefreshCcw className="size-4" /> Restaurar todos los días</button>
               <button className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-50 px-4 text-sm font-extrabold text-brand disabled:opacity-50" disabled={!dailyPlans?.length || busyKey !== null} onClick={() => void runAllDaysAction("delete")}><Trash2 className="size-4" /> Eliminar todas las sesiones</button>
             </div>
           </div>
+          <section className="flex flex-col gap-4 rounded-[26px] border border-line bg-white p-5 sm:flex-row sm:items-end sm:justify-between">
+            <label className="block w-full max-w-md space-y-2">
+              <span className="text-sm font-bold text-ink-soft">Estudiante para ejecución y sesiones</span>
+              <select
+                className="field"
+                value={executionStudentId}
+                onChange={(event) => setExecutionStudentId(event.target.value)}
+              >
+                {students.length === 0 && <option value="">No hay estudiantes disponibles</option>}
+                {students.map((student) => (
+                  <option key={student.id} value={student.id}>{studentName(student)}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex max-w-xl items-center gap-2 text-sm font-semibold text-muted">
+              <UserRound className="size-4 shrink-0 text-brand" /> Este selector no filtra los planes maestros; solo cambia la ejecución individual mostrada debajo.
+            </div>
+          </section>
           {dailyPlans === null && <LoadingState label="Cargando días generados…" />}
           {dailyPlans?.length === 0 && <EmptyState title="No hay días generados" description="Abre un plan activo y usa “Preparar hoy”, o inicia una práctica desde la app móvil." />}
           <div className="space-y-4">
@@ -731,22 +985,45 @@ export default function PlansPage() {
       )}
 
       {draft && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-sm" role="presentation" onMouseDown={() => setDraft(null)}>
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-sm" role="presentation" onMouseDown={closeStudyPlan}>
           <section className="mx-auto my-4 w-full max-w-6xl rounded-[30px] bg-white p-6 shadow-2xl sm:p-8" role="dialog" aria-modal="true" aria-labelledby="study-plan-title" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
-              <div><p className="text-xs font-extrabold uppercase tracking-[0.14em] text-brand">Plan maestro</p><h2 id="study-plan-title" className="mt-1 text-2xl font-black text-ink">{draft.id ? "Editar plan de estudio" : "Nuevo plan de estudio"}</h2><p className="mt-2 text-sm text-muted">Configura la duración general y distribuye las tarjetas en niveles con fechas propias.</p></div>
-              <button type="button" className="grid size-10 place-items-center rounded-full bg-canvas text-muted" onClick={() => setDraft(null)} aria-label="Cerrar"><X className="size-5" /></button>
+              <div><p className="text-xs font-extrabold uppercase tracking-[0.14em] text-brand">Plan maestro</p><h2 id="study-plan-title" className="mt-1 text-2xl font-black text-ink">{draft.id ? "Editar plan maestro" : "Nuevo plan maestro"}</h2><p className="mt-2 text-sm text-muted">{draft.id ? "Actualiza la programación sin alterar la fotografía de audiencia original." : "Combina grupos y estudiantes directos, y configura la programación que compartirán."}</p></div>
+              <button type="button" className="grid size-10 place-items-center rounded-full bg-canvas text-muted" onClick={closeStudyPlan} aria-label="Cerrar"><X className="size-5" /></button>
             </div>
 
             <form className="mt-7 space-y-7" onSubmit={saveStudyPlan}>
               <div className="grid gap-4 lg:grid-cols-3">
                 <label className="block space-y-2 lg:col-span-2"><span className="text-sm font-bold text-ink-soft">Nombre del plan</span><input className="field" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={120} placeholder="Ej. Animales · primer trimestre" required /></label>
-                <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Estudiante</span><select className="field" value={draft.studentId} onChange={(event) => changeDraftStudent(event.target.value)} required>{students?.map((student) => <option key={student.id} value={student.id}>{studentName(student)}</option>)}</select></label>
+                <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Estado</span><select className="field" value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as StudyPlanStatus })}><option value="draft">Borrador</option><option value="active">Activo</option><option value="paused">Pausado</option><option value="completed">Completado</option><option value="archived">Archivado</option></select></label>
                 <label className="block space-y-2 lg:col-span-3"><span className="text-sm font-bold text-ink-soft">Descripción (opcional)</span><textarea className="field min-h-24 resize-y" value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} maxLength={500} placeholder="Objetivo pedagógico, observaciones o indicaciones…" /></label>
                 <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Inicio del plan</span><input className="field" type="date" value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value })} required /></label>
                 <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Fin del plan</span><input className="field" type="date" value={draft.endDate} onChange={(event) => setDraft({ ...draft, endDate: event.target.value })} required /></label>
-                <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Estado</span><select className="field" value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as StudyPlanStatus })}><option value="draft">Borrador</option><option value="active">Activo</option><option value="paused">Pausado</option><option value="completed">Completado</option><option value="archived">Archivado</option></select></label>
               </div>
+
+              {draft.id ? (
+                <AudienceSnapshotSummary draft={draft} studentsById={studentsById} />
+              ) : (
+                <AudiencePicker
+                  query={audienceQuery}
+                  results={audienceResults}
+                  selectedItems={selectedAudienceItems}
+                  resolvedStudentCount={selectedResolvedStudentIds.length}
+                  loadedStudentCount={students?.length ?? 0}
+                  selectedDirectStudentCount={draft.directStudentIds.length}
+                  allStudentsSelected={Boolean(
+                    students?.length &&
+                      students.every((student) => draft.directStudentIds.includes(student.id)),
+                  )}
+                  isSearching={isAudienceSearching}
+                  error={audienceError}
+                  onQueryChange={changeAudienceQuery}
+                  onToggle={toggleAudienceItem}
+                  onSelectAllStudents={selectAllStudents}
+                  onClearDirectStudents={clearDirectStudents}
+                  isSelected={isAudienceSelected}
+                />
+              )}
 
               <div className="grid gap-4 rounded-[24px] bg-brand p-5 text-white md:grid-cols-4">
                 <label className="block space-y-2"><span className="text-sm font-bold text-white/80">Sesiones por día</span><input className="field border-0" type="number" min={1} max={10} value={draft.sessionsPerDay} onChange={(event) => setDraft({ ...draft, sessionsPerDay: Number(event.target.value) })} required /><span className="text-xs text-white/70">Normal: 5 sesiones</span></label>
@@ -756,7 +1033,7 @@ export default function PlansPage() {
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between gap-4"><div><h3 className="text-xl font-black text-ink">Niveles del plan</h3><p className="mt-1 text-sm text-muted">Los rangos de los niveles no pueden cruzarse.</p></div><button type="button" className="inline-flex h-10 items-center gap-2 rounded-xl bg-action-soft px-4 text-sm font-extrabold text-action" onClick={addLevel}><Plus className="size-4" /> Añadir nivel</button></div>
+                <div className="flex items-center justify-between gap-4"><div><h3 className="text-xl font-black text-ink">Niveles del plan</h3><p className="mt-1 text-sm text-muted">Los rangos no pueden cruzarse. Cada categoría define una cantidad objetivo para toda la audiencia.</p></div><button type="button" className="inline-flex h-10 items-center gap-2 rounded-xl bg-action-soft px-4 text-sm font-extrabold text-action" onClick={addLevel}><Plus className="size-4" /> Añadir nivel</button></div>
                 {draft.levels.map((level, levelIndex) => (
                   <article key={level.clientId} className="rounded-[24px] border border-line bg-canvas p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
@@ -770,25 +1047,73 @@ export default function PlansPage() {
                     <div className="mt-5 rounded-2xl bg-white p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                         <label className="block flex-1 space-y-2"><span className="text-sm font-bold text-ink-soft">Agregar categoría al nivel</span><select className="field" value={categoryToAdd[level.clientId] ?? ""} onChange={(event) => setCategoryToAdd((current) => ({ ...current, [level.clientId]: event.target.value }))}><option value="">Seleccionar categoría…</option>{categories.filter((category) => !level.categories.some((item) => item.categoryId === category.id)).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-                        <button type="button" className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-action px-5 font-extrabold text-white disabled:opacity-50" onClick={() => void addCategory(level)} disabled={!categoryToAdd[level.clientId]}><Plus className="size-4" /> Agregar</button>
+                        <button type="button" className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-action px-5 font-extrabold text-white disabled:opacity-50" onClick={() => addCategory(level)} disabled={!categoryToAdd[level.clientId]}><Plus className="size-4" /> Agregar</button>
                       </div>
 
-                      {level.categories.length === 0 && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Agrega al menos una categoría y selecciona sus tarjetas.</p>}
+                      {level.categories.length === 0 && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Agrega al menos una categoría y define cuántas tarjetas trabajará.</p>}
                       <div className="mt-4 space-y-4">
-                        {level.categories.map((selectedCategory) => {
-                          const key = cardKey(draft.studentId, selectedCategory.categoryId);
-                          const cards = (cardsByKey[key] ?? []).filter((card) => card.status !== "archived");
-                          const isLoading = loadingCardKeys.includes(key);
-                          const allSelected = cards.length > 0 && cards.every((card) => selectedCategory.wordCardIds.includes(card.id));
-                          return (
-                            <div key={selectedCategory.categoryId} className="rounded-2xl border border-line p-4">
-                              <div className="flex flex-wrap items-center justify-between gap-3"><div><strong className="text-ink">{categoryNames.get(selectedCategory.categoryId) ?? "Categoría"}</strong><p className="mt-1 text-xs font-semibold text-muted">{selectedCategory.wordCardIds.length} tarjetas seleccionadas</p></div><div className="flex gap-2"><button type="button" className="rounded-xl bg-action-soft px-3 py-2 text-xs font-extrabold text-action disabled:opacity-40" onClick={() => setCategoryCards(level, selectedCategory.categoryId, allSelected ? [] : cards.map((card) => card.id))} disabled={cards.length === 0}>{allSelected ? "Quitar todas" : "Seleccionar todas"}</button><button type="button" className="grid size-9 place-items-center rounded-xl bg-red-50 text-brand" onClick={() => removeCategory(level, selectedCategory.categoryId)} aria-label="Quitar categoría"><Trash2 className="size-4" /></button></div></div>
-                              {isLoading && <p className="mt-3 text-sm font-semibold text-muted">Cargando tarjetas…</p>}
-                              {!isLoading && cards.length === 0 && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">Este estudiante no tiene tarjetas disponibles en esta categoría.</p>}
-                              {cards.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{cards.map((card) => <label key={card.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm font-bold transition ${selectedCategory.wordCardIds.includes(card.id) ? "border-brand bg-brand-soft text-brand" : "border-line bg-white text-ink-soft"}`}><input className="size-4 accent-brand" type="checkbox" checked={selectedCategory.wordCardIds.includes(card.id)} onChange={() => toggleCard(level, selectedCategory.categoryId, card.id)} /><span className="truncate">{card.word}</span></label>)}</div>}
+                        {level.categories.map((selectedCategory) => (
+                          <div key={selectedCategory.categoryId} className="flex flex-col gap-4 rounded-2xl border border-line p-4 sm:flex-row sm:items-end sm:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <strong className="text-ink">{categoryNames.get(selectedCategory.categoryId) ?? "Categoría"}</strong>
+                              {selectedCategory.legacyWordCardIds !== undefined ? (
+                                selectedCategory.mode === "legacy" ? (
+                                  <div className="mt-2 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                                    <p>
+                                      Compatibilidad legacy: al guardar se conservarán exactamente los {selectedCategory.legacyWordCardIds.length} IDs de tarjetas originales.
+                                    </p>
+                                    <button
+                                      type="button"
+                                      className="mt-2 inline-flex items-center gap-1.5 font-extrabold text-amber-950 underline decoration-2 underline-offset-2"
+                                      onClick={() => setCategoryMode(level, selectedCategory.categoryId, "target")}
+                                    >
+                                      Usar cantidad objetivo
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 rounded-xl bg-action-soft p-3 text-xs font-semibold text-action">
+                                    <p>
+                                      Migración pendiente: al guardar, esta categoría dejará de usar IDs fijos y elegirá {selectedCategory.targetCardsCount} tarjetas por estudiante.
+                                    </p>
+                                    <button
+                                      type="button"
+                                      className="mt-2 inline-flex items-center gap-1.5 font-extrabold underline decoration-2 underline-offset-2"
+                                      onClick={() => setCategoryMode(level, selectedCategory.categoryId, "legacy")}
+                                    >
+                                      <RotateCcw className="size-3.5" /> Conservar tarjetas originales
+                                    </button>
+                                  </div>
+                                )
+                              ) : (
+                                <p className="mt-1 text-xs font-semibold text-muted">El motor elegirá las tarjetas adecuadas para cada estudiante al generar el día.</p>
+                              )}
                             </div>
-                          );
-                        })}
+                            <div className="flex items-end gap-2">
+                              <label className="block w-40 space-y-2">
+                                <span className="text-xs font-bold text-ink-soft">
+                                  {selectedCategory.mode === "legacy" ? "Tarjetas actuales" : "Tarjetas objetivo"}
+                                </span>
+                                <input
+                                  className="field"
+                                  type="number"
+                                  min={1}
+                                  max={50}
+                                  value={selectedCategory.targetCardsCount}
+                                  disabled={selectedCategory.mode === "legacy"}
+                                  onChange={(event) =>
+                                    setCategoryTarget(
+                                      level,
+                                      selectedCategory.categoryId,
+                                      Number(event.target.value),
+                                    )
+                                  }
+                                  required={selectedCategory.mode === "target"}
+                                />
+                              </label>
+                              <button type="button" className="grid size-12 place-items-center rounded-xl bg-red-50 text-brand" onClick={() => removeCategory(level, selectedCategory.categoryId)} aria-label="Quitar categoría"><Trash2 className="size-4" /></button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </article>
@@ -796,7 +1121,7 @@ export default function PlansPage() {
               </div>
 
               {formError && <p className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700" role="alert">{formError}</p>}
-              <div className="sticky bottom-0 flex justify-end gap-3 border-t border-line bg-white/95 pt-5 backdrop-blur"><button type="button" className="h-12 rounded-2xl px-5 font-bold text-muted" onClick={() => setDraft(null)}>Cancelar</button><button className="inline-flex h-12 items-center gap-2 rounded-2xl bg-brand px-6 font-extrabold text-white disabled:opacity-60" disabled={isSavingPlan}><Save className="size-4" /> {isSavingPlan ? "Guardando…" : "Guardar plan"}</button></div>
+              <div className="sticky bottom-0 flex justify-end gap-3 border-t border-line bg-white/95 pt-5 backdrop-blur"><button type="button" className="h-12 rounded-2xl px-5 font-bold text-muted" onClick={closeStudyPlan}>Cancelar</button><button className="inline-flex h-12 items-center gap-2 rounded-2xl bg-brand px-6 font-extrabold text-white disabled:opacity-60" disabled={isSavingPlan}><Save className="size-4" /> {isSavingPlan ? "Guardando…" : "Guardar plan"}</button></div>
             </form>
           </section>
         </div>
@@ -819,8 +1144,289 @@ export default function PlansPage() {
   );
 }
 
+type AudiencePickerProps = {
+  query: string;
+  results: AudienceSearchItem[];
+  selectedItems: AudienceSearchItem[];
+  resolvedStudentCount: number;
+  loadedStudentCount: number;
+  selectedDirectStudentCount: number;
+  allStudentsSelected: boolean;
+  isSearching: boolean;
+  error: string | null;
+  onQueryChange: (value: string) => void;
+  onToggle: (item: AudienceSearchItem) => void;
+  onSelectAllStudents: () => void;
+  onClearDirectStudents: () => void;
+  isSelected: (item: AudienceSearchItem) => boolean;
+};
+
+function AudiencePicker({
+  query,
+  results,
+  selectedItems,
+  resolvedStudentCount,
+  loadedStudentCount,
+  selectedDirectStudentCount,
+  allStudentsSelected,
+  isSearching,
+  error,
+  onQueryChange,
+  onToggle,
+  onSelectAllStudents,
+  onClearDirectStudents,
+  isSelected,
+}: AudiencePickerProps) {
+  return (
+    <section className="rounded-[24px] border border-line bg-canvas p-5" aria-labelledby="audience-title">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 id="audience-title" className="text-xl font-black text-ink">Audiencia del plan</h3>
+          <p className="mt-1 text-sm text-muted">Busca y combina grupos con estudiantes directos. Cada estudiante cuenta una sola vez.</p>
+        </div>
+        <span className="inline-flex w-fit items-center gap-2 rounded-full bg-green-100 px-3 py-1 text-sm font-extrabold text-green-800" aria-live="polite">
+          <Users className="size-4" /> {resolvedStudentCount}/{MAX_PLAN_AUDIENCE_STUDENTS} estudiantes únicos
+        </span>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-action/20 bg-action-soft/50 p-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-action px-4 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={onSelectAllStudents}
+            disabled={loadedStudentCount === 0 || allStudentsSelected}
+            aria-pressed={allStudentsSelected}
+          >
+            {allStudentsSelected ? <Check className="size-4" /> : <Users className="size-4" />}
+            Seleccionar todos los estudiantes actuales
+            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{loadedStudentCount}</span>
+          </button>
+          {selectedDirectStudentCount > 0 && (
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-extrabold text-ink-soft shadow-sm"
+              onClick={onClearDirectStudents}
+            >
+              <X className="size-4" /> Quitar estudiantes directos ({selectedDirectStudentCount})
+            </button>
+          )}
+        </div>
+        <p className="mt-2 text-xs font-semibold text-muted">
+          Los grupos seleccionados se conservan al quitar estudiantes directos. El límite es de {MAX_PLAN_AUDIENCE_STUDENTS} estudiantes únicos entre todas las fuentes.
+        </p>
+      </div>
+
+      <label className="relative mt-5 block">
+        <span className="sr-only">Buscar estudiante o grupo</span>
+        <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted" />
+        <input
+          className="field pl-12"
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="Buscar por estudiante, correo o nombre de grupo…"
+          autoComplete="off"
+        />
+      </label>
+
+      {selectedItems.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-muted">Selección actual</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {selectedItems.map((item) => (
+              <button
+                key={item.audience_key}
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-extrabold text-ink-soft shadow-sm"
+                onClick={() => onToggle(item)}
+                aria-label={`Quitar ${audienceItemLabel(item)}`}
+              >
+                {item.type === "group" ? <Users className="size-4 text-action" /> : <UserRound className="size-4 text-brand" />}
+                <span className="max-w-56 truncate">{audienceItemLabel(item)}</span>
+                <X className="size-3.5 text-muted" />
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Selecciona al menos un grupo o estudiante.</p>
+      )}
+
+      <div className="mt-4 max-h-72 space-y-2 overflow-y-auto pr-1">
+        {isSearching && <p className="rounded-xl bg-white p-4 text-sm font-semibold text-muted">Buscando audiencia…</p>}
+        {!isSearching && error && <p className="rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700" role="alert">{error}</p>}
+        {!isSearching && !error && results.length === 0 && (
+          <p className="rounded-xl bg-white p-4 text-sm font-semibold text-muted">No encontramos grupos ni estudiantes con esa búsqueda.</p>
+        )}
+        {!isSearching && !error && results.map((item) => {
+          const selected = isSelected(item);
+          return (
+            <button
+              key={item.audience_key}
+              type="button"
+              aria-pressed={selected}
+              className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${selected ? "border-brand bg-brand-soft" : "border-line bg-white hover:border-action/40"}`}
+              onClick={() => onToggle(item)}
+            >
+              <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.type === "group" ? "bg-action-soft text-action" : "bg-red-50 text-brand"}`}>
+                {item.type === "group" ? <Users className="size-5" /> : <UserRound className="size-5" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-sm text-ink">{audienceItemLabel(item)}</strong>
+                <span className="mt-0.5 block truncate text-xs font-semibold text-muted">{audienceItemMeta(item)}</span>
+              </span>
+              <span className={`grid size-7 shrink-0 place-items-center rounded-full border ${selected ? "border-brand bg-brand text-white" : "border-line bg-white text-transparent"}`}>
+                <Check className="size-4" />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {!isSearching && !error && results.length > 0 && (
+        <p className="mt-3 text-xs font-semibold text-muted">Mostrando {results.length} coincidencias recibidas. Escribe para refinar la búsqueda.</p>
+      )}
+    </section>
+  );
+}
+
+function AudienceSnapshotSummary({
+  draft,
+  studentsById,
+}: {
+  draft: StudyPlanDraft;
+  studentsById: Map<string, Student>;
+}) {
+  const snapshotById = new Map(draft.audienceStudents.map((student) => [student.student_id, student]));
+  const visibleStudents = draft.resolvedStudentIds.slice(0, 12);
+
+  return (
+    <section className="rounded-[24px] border border-action/20 bg-action-soft/50 p-5" aria-labelledby="audience-snapshot-title">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 id="audience-snapshot-title" className="text-xl font-black text-ink">Audiencia guardada</h3>
+          <p className="mt-1 text-sm text-muted">Esta fotografía es inmutable. Crea otro plan si necesitas una audiencia diferente.</p>
+        </div>
+        <span className="inline-flex w-fit items-center gap-2 rounded-full bg-white px-3 py-1 text-sm font-extrabold text-action shadow-sm">
+          <Users className="size-4" /> {draft.resolvedStudentIds.length} estudiantes
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <PlanFact icon={<Users className="size-4" />} label={`${draft.groupIds.length} grupos de origen`} />
+        <PlanFact icon={<UserRound className="size-4" />} label={`${draft.directStudentIds.length} estudiantes directos`} />
+        <PlanFact icon={<Check className="size-4" />} label={`${draft.resolvedStudentIds.length} únicos resueltos`} />
+      </div>
+      {visibleStudents.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {visibleStudents.map((studentId) => {
+            const snapshot = snapshotById.get(studentId);
+            const currentStudent = studentsById.get(studentId);
+            const label = snapshot?.display_name || snapshot?.username || snapshot?.email ||
+              (currentStudent ? studentName(currentStudent) : `Estudiante ${studentId.slice(-6)}`);
+            return <span key={studentId} className="rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-ink-soft shadow-sm">{label}</span>;
+          })}
+          {draft.resolvedStudentIds.length > visibleStudents.length && (
+            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-muted shadow-sm">+{draft.resolvedStudentIds.length - visibleStudents.length} más</span>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function PlanFact({ icon, label }: { icon: React.ReactNode; label: string }) {
   return <span className="flex items-center gap-2 rounded-xl bg-canvas px-3 py-2 font-semibold text-ink-soft">{icon}{label}</span>;
+}
+
+function studentAudienceLabel(item: StudentAudienceItem): string {
+  return item.display_name || item.username || item.email;
+}
+
+function groupAudienceLabel(item: GroupAudienceItem): string {
+  return item.name;
+}
+
+function audienceItemLabel(item: AudienceSearchItem): string {
+  return item.type === "group" ? groupAudienceLabel(item) : studentAudienceLabel(item);
+}
+
+function audienceItemMeta(item: AudienceSearchItem): string {
+  if (item.type === "group") {
+    return `Grupo · ${item.student_ids.length} ${item.student_ids.length === 1 ? "estudiante" : "estudiantes"}`;
+  }
+  return item.unassigned ? `Estudiante sin grupo · ${item.email}` : `Estudiante · ${item.email}`;
+}
+
+function resolveAudienceStudentIds(items: AudienceSearchItem[]): string[] {
+  return uniqueStrings(
+    items.flatMap((item) => (item.type === "group" ? item.student_ids : [item.id])),
+  );
+}
+
+function toStudentAudienceItem(student: Student): StudentAudienceItem {
+  return {
+    type: "student",
+    audience_key: `student:${student.id}`,
+    id: student.id,
+    display_name: student.displayName ?? student.display_name,
+    email: student.email,
+    group_ids: [],
+    unassigned: false,
+  };
+}
+
+function studyPlanStudentIds(plan: StudyPlan): string[] {
+  return uniqueStrings([
+    ...(plan.student_ids ?? []),
+    ...(plan.students ?? []).map((student) => student.student_id),
+    ...(plan.student_id ? [plan.student_id] : []),
+  ]);
+}
+
+function studyPlanDirectStudentIds(plan: StudyPlan): string[] {
+  return uniqueStrings([
+    ...(plan.direct_student_ids ?? []),
+    ...(!plan.direct_student_ids?.length && plan.student_id ? [plan.student_id] : []),
+  ]);
+}
+
+function categoryTargetCardsCount(category: StudyPlan["levels"][number]["categories"][number]): number {
+  const configuredTarget = validTargetCardsCount(category.target_cards_count);
+  if (configuredTarget !== undefined) return configuredTarget;
+  return category.word_card_ids?.length || 5;
+}
+
+function validTargetCardsCount(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function toStudyPlanCategoryPayload(category: LevelCategoryDraft) {
+  if (category.mode === "legacy" && category.legacyWordCardIds !== undefined) {
+    return {
+      category_id: category.categoryId,
+      word_card_ids: category.legacyWordCardIds,
+    };
+  }
+
+  return {
+    category_id: category.categoryId,
+    target_cards_count: category.targetCardsCount,
+  };
+}
+
+function normalizeGenerateDaySummary(
+  response: GenerateStudyPlanDayResponse | DailyPlanSummary[],
+): GenerateStudyPlanDayResponse["summary"] {
+  if (!Array.isArray(response)) return response.summary;
+  return {
+    total: response.length,
+    generated: response.length,
+    existing: 0,
+    failed: 0,
+  };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function createClientId(): string {
@@ -831,10 +1437,6 @@ function createClientId(): string {
 
 function newLevel(index: number, startDate: string, endDate: string): LevelDraft {
   return { clientId: createClientId(), name: `Nivel ${index}`, startDate, endDate, categories: [] };
-}
-
-function cardKey(studentId: string, categoryId: string): string {
-  return `${studentId}:${categoryId}`;
 }
 
 function inputDate(value: string): string {
