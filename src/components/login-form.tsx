@@ -94,7 +94,7 @@ export function LoginForm() {
       </button>
 
       <p className="text-center text-sm leading-6 text-muted">
-        Acceso exclusivo para cuentas con rol docente.
+        Acceso para cuentas con rol docente o administrador.
       </p>
     </form>
   );

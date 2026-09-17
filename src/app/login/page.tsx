@@ -37,7 +37,7 @@ export default function LoginPage() {
             Inicia sesión
           </h2>
           <p className="mb-9 mt-3 text-base leading-7 text-muted">
-            Usa las mismas credenciales de profesor de la aplicación móvil.
+            Usa tus credenciales de profesor o administrador.
           </p>
           <LoginForm />
         </div>
