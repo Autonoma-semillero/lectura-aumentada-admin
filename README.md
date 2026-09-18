@@ -41,7 +41,9 @@ Estos son exactamente los dos comandos que corre el CI. `next build` ejecuta el 
 
 ## Integración continua
 
-`.github/workflows/ci.yml` corre en cada push a `main` y en cada pull request contra `main`: instala con `npm ci`, pasa el lint y compila.
+> **Todavía no está activo.** El workflow vive en [`docs/ci-workflow.yml`](./docs/ci-workflow.yml) en vez de en `.github/workflows/`, porque GitHub rechaza que un token OAuth sin el scope `workflow` cree archivos bajo esa carpeta. El propio archivo explica cómo activarlo; son tres comandos.
+
+Una vez activo, corre en cada push a `main` y en cada pull request contra `main`: instala con `npm ci`, pasa el lint y compila.
 
 El workflow **no despliega**, igual que el CI del backend. El despliegue lo hace Vercel por su cuenta (ver abajo). Eso implica algo que conviene tener presente: **un CI en rojo no bloquea el despliegue**. El CI es la señal para no mergear; si se mergea igual, Vercel va a desplegar. Si en algún momento se necesita que el deploy quede bloqueado por los tests, hay que mover el despliegue a Actions con `vercel build` y `vercel deploy --prebuilt`, y cargar `VERCEL_TOKEN`, `VERCEL_ORG_ID` y `VERCEL_PROJECT_ID` como secrets del repositorio.
 

@@ -1,0 +1,44 @@
+# Workflow de CI del panel docente — INACTIVO EN ESTA RUTA.
+#
+# Este archivo vive en `docs/` y no en `.github/workflows/` porque GitHub
+# rechaza que un token OAuth sin el scope `workflow` cree archivos bajo esa
+# carpeta. El contenido está verificado y listo; solo falta moverlo.
+#
+# Para activarlo, con una credencial que tenga el scope `workflow`:
+#
+#     gh auth refresh -h github.com -s workflow
+#     mkdir -p .github/workflows
+#     git mv docs/ci-workflow.yml .github/workflows/ci.yml
+#     # borrar este bloque de comentarios, hasta la línea `name:`
+#     git commit -m "ci: activate the quality workflow"
+#     git push
+#
+# Verificado localmente antes de guardarlo: `npm run lint` sin hallazgos y
+# `npm run build` compilando 18 rutas.
+
+name: CI
+
+# Vercel despliega este proyecto por su integración nativa con Git, no desde
+# aquí. Este workflow es el control de calidad: falla visiblemente en el PR
+# cuando el lint o el build se rompen, antes de que alguien haga merge.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # `next build` ejecuta el type-check del proyecto, así que cubre TypeScript.
+      # BACKEND_BASE_URL no se define a propósito: src/lib/backend.ts tiene un
+      # valor por defecto y el build no debe depender de un backend concreto.
+      - run: npm run build
