@@ -36,3 +36,39 @@ La carga directa de modelos acepta GLB 2.0 de hasta 25 MB. El flujo por URL perm
 npm run lint
 npm run build
 ```
+
+Estos son exactamente los dos comandos que corre el CI. `next build` ejecuta el type-check del proyecto, así que no hay un paso de TypeScript aparte.
+
+## Integración continua
+
+`.github/workflows/ci.yml` corre en cada push a `main` y en cada pull request contra `main`: instala con `npm ci`, pasa el lint y compila.
+
+El workflow **no despliega**, igual que el CI del backend. El despliegue lo hace Vercel por su cuenta (ver abajo). Eso implica algo que conviene tener presente: **un CI en rojo no bloquea el despliegue**. El CI es la señal para no mergear; si se mergea igual, Vercel va a desplegar. Si en algún momento se necesita que el deploy quede bloqueado por los tests, hay que mover el despliegue a Actions con `vercel build` y `vercel deploy --prebuilt`, y cargar `VERCEL_TOKEN`, `VERCEL_ORG_ID` y `VERCEL_PROJECT_ID` como secrets del repositorio.
+
+El CI no define `BACKEND_BASE_URL` a propósito: `src/lib/backend.ts` tiene un valor por defecto y la compilación no debe depender de que un backend concreto esté levantado.
+
+## Despliegue en Vercel
+
+El proyecto se despliega con la integración nativa de Vercel con Git, sin workflow de despliegue en el repositorio:
+
+- cada push a `main` genera un despliegue de producción;
+- cada pull request genera un despliegue de *preview* con su propia URL.
+
+Configuración del proyecto en Vercel:
+
+| Ajuste | Valor |
+|---|---|
+| Framework preset | Next.js |
+| Build command | `npm run build` (valor por defecto) |
+| Install command | `npm install` (valor por defecto) |
+| Output directory | valor por defecto de Next.js |
+| Production branch | `main` |
+
+Variables de entorno a definir en el proyecto de Vercel (ver [`.env.example`](./.env.example)):
+
+| Variable | Para qué | Entornos |
+|---|---|---|
+| `BACKEND_BASE_URL` | URL base de la API del backend. Si se omite, se usa el valor por defecto del código. | Production, Preview |
+| `BLOB_READ_WRITE_TOKEN` | Requerida para que las cargas de GLB y audio persistan. Sin ella, los archivos se escriben en `public/uploads` y se pierden en cada despliegue. | Production, Preview |
+
+Este proyecto no necesita `vercel.json`: Next.js se detecta sin configuración. El `vercel.json` del backend existe solo porque ese repositorio expone un entry serverless propio.
