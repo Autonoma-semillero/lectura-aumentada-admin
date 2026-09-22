@@ -68,6 +68,7 @@ export default function UsersPage() {
           password: form.password,
           roles: [form.role],
           status: "active",
+          metadata: {},
         }),
       });
       setForm(initialForm);
