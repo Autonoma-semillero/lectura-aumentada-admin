@@ -21,7 +21,6 @@ export default function CardsPage() {
   const [students, setStudents] = useState<Student[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [models, setModels] = useState<ArModel[]>([]);
-  const [studentId, setStudentId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [cards, setCards] = useState<WordCard[] | null>(null);
   const [draft, setDraft] = useState<CardDraft | null>(null);
@@ -42,7 +41,6 @@ export default function CardsPage() {
       setStudents(nextStudents);
       setCategories(nextCategories);
       setModels(nextModels);
-      setStudentId((value) => value || nextStudents[0]?.id || "");
       setCategoryId((value) => value || nextCategories[0]?.id || "");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible cargar los filtros.");
@@ -50,18 +48,18 @@ export default function CardsPage() {
   }
 
   const loadCards = useCallback(async () => {
-    if (!studentId || !categoryId) {
+    if (!categoryId) {
       setCards([]);
       return;
     }
     setCards(null);
     setError(null);
     try {
-      setCards(await apiFetch<WordCard[]>(`word-cards?student_id=${studentId}&category_id=${categoryId}`));
+      setCards(await apiFetch<WordCard[]>(`categories/${categoryId}/word-cards`));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible cargar las tarjetas.");
     }
-  }, [studentId, categoryId]);
+  }, [categoryId]);
 
   useEffect(() => { void Promise.resolve().then(loadFilters); }, []);
   useEffect(() => { void Promise.resolve().then(loadCards); }, [loadCards]);
@@ -71,8 +69,19 @@ export default function CardsPage() {
     return cards?.filter((card) => card.word.toLocaleLowerCase("es").includes(normalized)) ?? [];
   }, [cards, query]);
 
+  const studentsById = useMemo(() => {
+    const map = new Map<string, Student>();
+    students?.forEach((student) => map.set(student.id, student));
+    return map;
+  }, [students]);
+
+  function ownerName(card: WordCard): string {
+    const owner = studentsById.get(card.student_id);
+    return owner ? studentName(owner) : "Estudiante desconocido";
+  }
+
   function newDraft(): CardDraft {
-    return { studentId, categoryId, word: "", audioUrl: "", learningUnitId: "", markerId: "" };
+    return { studentId: students?.[0]?.id ?? "", categoryId, word: "", audioUrl: "", learningUnitId: "", markerId: "" };
   }
 
   function editDraft(card: WordCard): CardDraft {
@@ -157,10 +166,9 @@ export default function CardsPage() {
 
   return (
     <div className="space-y-7">
-      <PageHeader eyebrow="Contenido" title="Tarjetas de palabras" description="Asigna palabras, pronunciación y experiencias 3D a cada estudiante." action={<button className="inline-flex h-12 items-center gap-2 rounded-2xl bg-brand px-5 font-extrabold text-white disabled:opacity-50" onClick={() => setDraft(newDraft())} disabled={!studentId || !categoryId}><Plus className="size-5" /> Nueva tarjeta</button>} />
+      <PageHeader eyebrow="Contenido" title="Tarjetas de palabras" description="Asigna palabras, pronunciación y experiencias 3D a cada estudiante." action={<button className="inline-flex h-12 items-center gap-2 rounded-2xl bg-brand px-5 font-extrabold text-white disabled:opacity-50" onClick={() => setDraft(newDraft())} disabled={!categoryId}><Plus className="size-5" /> Nueva tarjeta</button>} />
 
-      <section className="grid gap-4 rounded-[26px] border border-line bg-white p-5 md:grid-cols-[1fr_1fr_1.2fr]">
-        <label className="space-y-2"><span className="text-sm font-bold text-ink-soft">Estudiante</span><select className="field" value={studentId} onChange={(event) => setStudentId(event.target.value)}>{students?.map((student) => <option key={student.id} value={student.id}>{studentName(student)}</option>)}</select></label>
+      <section className="grid gap-4 rounded-[26px] border border-line bg-white p-5 md:grid-cols-[1fr_1.2fr]">
         <label className="space-y-2"><span className="text-sm font-bold text-ink-soft">Temática</span><select className="field" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
         <label className="space-y-2"><span className="text-sm font-bold text-ink-soft">Buscar palabra</span><span className="relative block"><Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-400" /><input className="field pl-12" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ej. gato" /></span></label>
       </section>
@@ -168,16 +176,17 @@ export default function CardsPage() {
       {!students && !error && <LoadingState label="Cargando contenido…" />}
       {students && cards === null && !error && <LoadingState label="Cargando tarjetas…" />}
       {error && <ErrorState message={error} onRetry={loadFilters} />}
-      {cards && visibleCards.length === 0 && <EmptyState title="No hay tarjetas aquí" description="Crea una tarjeta para este estudiante y temática." />}
+      {cards && visibleCards.length === 0 && <EmptyState title="No hay tarjetas aquí" description="Crea una tarjeta para esta temática." />}
 
       {visibleCards.length > 0 && (
         <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-[0_10px_35px_rgba(15,23,42,0.04)]">
-          <div className="hidden grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr_auto] gap-4 border-b border-line bg-slate-50 px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-muted md:grid">
-            <span>Palabra</span><span>Estado</span><span>Práctica</span><span>Recursos</span><span>Acciones</span>
+          <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.7fr_auto] gap-4 border-b border-line bg-slate-50 px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-muted md:grid">
+            <span>Palabra</span><span>Estudiante</span><span>Estado</span><span>Práctica</span><span>Recursos</span><span>Acciones</span>
           </div>
           {visibleCards.map((card) => (
-            <article key={card.id} className="grid gap-4 border-b border-line p-5 last:border-0 md:grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr_auto] md:items-center md:px-6">
+            <article key={card.id} className="grid gap-4 border-b border-line p-5 last:border-0 md:grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.7fr_auto] md:items-center md:px-6">
               <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-brand-soft text-lg font-black text-brand">{card.initial_letter || card.word.slice(0, 1).toUpperCase()}</span><div><strong className="block text-lg text-ink">{card.word}</strong><span className="text-xs text-muted">ID {card.id.slice(-6)}</span></div></div>
+              <div className="text-sm font-semibold text-ink">{ownerName(card)}</div>
               <div><StatusBadge status={card.status} /></div>
               <div className="text-sm"><strong className="block text-ink">{card.times_shown}</strong><span className="text-muted">veces vista</span></div>
               <div className="flex gap-2 text-muted">{card.audio_url && <Volume2 className="size-5 text-action" />}{card.learning_unit_id && <Box className="size-5 text-success" />}{!card.audio_url && !card.learning_unit_id && <span className="text-sm">Sin recursos</span>}</div>
