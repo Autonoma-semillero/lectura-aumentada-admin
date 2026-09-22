@@ -32,6 +32,7 @@ import type {
   DomanSession,
   GenerateStudyPlanDayResponse,
   GroupAudienceItem,
+  PreviewCategoryCardsResponse,
   Student,
   StudentAudienceItem,
   StudyPlan,
@@ -43,8 +44,15 @@ import { studentName } from "@/lib/types";
 type LevelCategoryDraft = {
   categoryId: string;
   targetCardsCount: number;
-  mode: "legacy" | "target";
+  mode: "legacy" | "target" | "words";
   legacyWordCardIds?: string[];
+  words?: string[];
+};
+
+type CategoryPreviewState = {
+  status: "loading" | "error" | "done";
+  error?: string;
+  students?: PreviewCategoryCardsResponse["students"];
 };
 
 type LevelDraft = {
@@ -122,6 +130,7 @@ export default function PlansPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [previewByKey, setPreviewByKey] = useState<Record<string, CategoryPreviewState>>({});
 
   const categoryNames = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name])),
@@ -251,6 +260,7 @@ export default function PlansPage() {
     setAudienceError(null);
     setIsAudienceSearching(true);
     setFormError(null);
+    setPreviewByKey({});
   }
 
   function closeStudyPlan() {
@@ -261,6 +271,7 @@ export default function PlansPage() {
     setAudienceError(null);
     setIsAudienceSearching(false);
     setFormError(null);
+    setPreviewByKey({});
   }
 
   function editStudyPlan(plan: StudyPlan) {
@@ -299,11 +310,17 @@ export default function PlansPage() {
           const legacyWordCardIds = Array.isArray(category.word_card_ids)
             ? [...category.word_card_ids]
             : undefined;
+          const words = Array.isArray(category.word_card_words)
+            ? [...category.word_card_words]
+            : undefined;
+          const mode: LevelCategoryDraft["mode"] =
+            legacyWordCardIds !== undefined ? "legacy" : words !== undefined ? "words" : "target";
           return {
             categoryId: category.category_id,
             targetCardsCount: categoryTargetCardsCount(category),
-            mode: legacyWordCardIds === undefined ? "target" : "legacy",
+            mode,
             legacyWordCardIds,
+            words,
           };
         }),
       })),
@@ -315,6 +332,7 @@ export default function PlansPage() {
     setAudienceError(null);
     setIsAudienceSearching(false);
     setFormError(null);
+    setPreviewByKey({});
   }
 
   function changeAudienceQuery(value: string) {
@@ -483,9 +501,73 @@ export default function PlansPage() {
   ) {
     patchLevel(level.clientId, {
       categories: level.categories.map((category) =>
-        category.categoryId === categoryId ? { ...category, mode } : category,
+        category.categoryId === categoryId
+          ? { ...category, mode, words: mode === "words" ? (category.words ?? []) : category.words }
+          : category,
       ),
     });
+  }
+
+  function setCategoryWords(level: LevelDraft, categoryId: string, words: string[]) {
+    patchLevel(level.clientId, {
+      categories: level.categories.map((category) =>
+        category.categoryId === categoryId ? { ...category, words } : category,
+      ),
+    });
+    setPreviewByKey((current) => {
+      const key = `${level.clientId}:${categoryId}`;
+      if (!(key in current)) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function previewCategoryWords(level: LevelDraft, category: LevelCategoryDraft) {
+    if (!draft) return;
+    const key = `${level.clientId}:${category.categoryId}`;
+    const words = (category.words ?? []).map((word) => word.trim()).filter(Boolean);
+    const studentIds = draft.id ? draft.resolvedStudentIds : selectedResolvedStudentIds;
+    if (words.length === 0) {
+      setPreviewByKey((current) => ({
+        ...current,
+        [key]: { status: "error", error: "Agrega al menos una palabra antes de previsualizar." },
+      }));
+      return;
+    }
+    if (studentIds.length === 0) {
+      setPreviewByKey((current) => ({
+        ...current,
+        [key]: { status: "error", error: "Define la audiencia del plan antes de previsualizar." },
+      }));
+      return;
+    }
+    setPreviewByKey((current) => ({ ...current, [key]: { status: "loading" } }));
+    try {
+      const response = await apiFetch<PreviewCategoryCardsResponse>(
+        "doman/study-plans/preview-category-cards",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            category_id: category.categoryId,
+            word_card_words: words,
+            student_ids: studentIds,
+          }),
+        },
+      );
+      setPreviewByKey((current) => ({
+        ...current,
+        [key]: { status: "done", students: response.students },
+      }));
+    } catch (cause) {
+      setPreviewByKey((current) => ({
+        ...current,
+        [key]: {
+          status: "error",
+          error: cause instanceof Error ? cause.message : "No fue posible previsualizar las tarjetas.",
+        },
+      }));
+    }
   }
 
   async function saveStudyPlan(event: FormEvent<HTMLFormElement>) {
@@ -521,6 +603,16 @@ export default function PlansPage() {
       setFormError("La cantidad objetivo de cada categoría debe estar entre 1 y 50 tarjetas.");
       return;
     }
+    if (
+      draft.levels.some((level) =>
+        level.categories.some(
+          (category) => category.mode === "words" && (category.words ?? []).length === 0,
+        ),
+      )
+    ) {
+      setFormError("Cada categoría con palabras explícitas debe tener al menos una palabra.");
+      return;
+    }
 
     const audienceStudentCount = draft.id
       ? draft.resolvedStudentIds.length
@@ -530,9 +622,7 @@ export default function PlansPage() {
       const cardsPerStudent = level.categories.reduce(
         (total, category) =>
           total +
-          (category.mode === "legacy"
-            ? (category.legacyWordCardIds?.length ?? category.targetCardsCount)
-            : category.targetCardsCount),
+          categoryCardsPerStudent(category),
         0,
       );
       const sessionCards =
@@ -544,9 +634,7 @@ export default function PlansPage() {
       const cardsPerStudent = oversizedLevel.categories.reduce(
         (total, category) =>
           total +
-          (category.mode === "legacy"
-            ? (category.legacyWordCardIds?.length ?? category.targetCardsCount)
-            : category.targetCardsCount),
+          categoryCardsPerStudent(category),
         0,
       );
       const sessionCards =
@@ -1053,65 +1141,113 @@ export default function PlansPage() {
                       {level.categories.length === 0 && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Agrega al menos una categoría y define cuántas tarjetas trabajará.</p>}
                       <div className="mt-4 space-y-4">
                         {level.categories.map((selectedCategory) => (
-                          <div key={selectedCategory.categoryId} className="flex flex-col gap-4 rounded-2xl border border-line p-4 sm:flex-row sm:items-end sm:justify-between">
-                            <div className="min-w-0 flex-1">
-                              <strong className="text-ink">{categoryNames.get(selectedCategory.categoryId) ?? "Categoría"}</strong>
-                              {selectedCategory.legacyWordCardIds !== undefined ? (
-                                selectedCategory.mode === "legacy" ? (
-                                  <div className="mt-2 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">
-                                    <p>
-                                      Compatibilidad legacy: al guardar se conservarán exactamente los {selectedCategory.legacyWordCardIds.length} IDs de tarjetas originales.
-                                    </p>
-                                    <button
-                                      type="button"
-                                      className="mt-2 inline-flex items-center gap-1.5 font-extrabold text-amber-950 underline decoration-2 underline-offset-2"
-                                      onClick={() => setCategoryMode(level, selectedCategory.categoryId, "target")}
-                                    >
-                                      Usar cantidad objetivo
-                                    </button>
-                                  </div>
+                          <div key={selectedCategory.categoryId} className="flex flex-col gap-4 rounded-2xl border border-line p-4">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                              <div className="min-w-0 flex-1">
+                                <strong className="text-ink">{categoryNames.get(selectedCategory.categoryId) ?? "Categoría"}</strong>
+                                {selectedCategory.legacyWordCardIds !== undefined ? (
+                                  selectedCategory.mode === "legacy" ? (
+                                    <div className="mt-2 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                                      <p>
+                                        Compatibilidad legacy: al guardar se conservarán exactamente los {selectedCategory.legacyWordCardIds.length} IDs de tarjetas originales.
+                                      </p>
+                                      <button
+                                        type="button"
+                                        className="mt-2 inline-flex items-center gap-1.5 font-extrabold text-amber-950 underline decoration-2 underline-offset-2"
+                                        onClick={() => setCategoryMode(level, selectedCategory.categoryId, "target")}
+                                      >
+                                        Usar cantidad objetivo
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-2 rounded-xl bg-action-soft p-3 text-xs font-semibold text-action">
+                                      <p>
+                                        Migración pendiente: al guardar, esta categoría dejará de usar IDs fijos y elegirá {selectedCategory.targetCardsCount} tarjetas por estudiante.
+                                      </p>
+                                      <button
+                                        type="button"
+                                        className="mt-2 inline-flex items-center gap-1.5 font-extrabold underline decoration-2 underline-offset-2"
+                                        onClick={() => setCategoryMode(level, selectedCategory.categoryId, "legacy")}
+                                      >
+                                        <RotateCcw className="size-3.5" /> Conservar tarjetas originales
+                                      </button>
+                                    </div>
+                                  )
                                 ) : (
-                                  <div className="mt-2 rounded-xl bg-action-soft p-3 text-xs font-semibold text-action">
-                                    <p>
-                                      Migración pendiente: al guardar, esta categoría dejará de usar IDs fijos y elegirá {selectedCategory.targetCardsCount} tarjetas por estudiante.
+                                  <>
+                                    <p className="mt-1 text-xs font-semibold text-muted">
+                                      {selectedCategory.mode === "words"
+                                        ? "El motor resolverá exactamente estas palabras para cada estudiante al generar el día."
+                                        : "El motor elegirá las tarjetas adecuadas para cada estudiante al generar el día."}
                                     </p>
-                                    <button
-                                      type="button"
-                                      className="mt-2 inline-flex items-center gap-1.5 font-extrabold underline decoration-2 underline-offset-2"
-                                      onClick={() => setCategoryMode(level, selectedCategory.categoryId, "legacy")}
-                                    >
-                                      <RotateCcw className="size-3.5" /> Conservar tarjetas originales
-                                    </button>
-                                  </div>
-                                )
-                              ) : (
-                                <p className="mt-1 text-xs font-semibold text-muted">El motor elegirá las tarjetas adecuadas para cada estudiante al generar el día.</p>
-                              )}
+                                    <div className="mt-2 inline-flex rounded-xl border border-line bg-canvas p-1 text-xs font-extrabold">
+                                      <button
+                                        type="button"
+                                        className={`rounded-lg px-3 py-1.5 ${selectedCategory.mode === "target" ? "bg-white text-ink shadow-sm" : "text-muted"}`}
+                                        onClick={() => setCategoryMode(level, selectedCategory.categoryId, "target")}
+                                      >
+                                        Cantidad objetivo
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={`rounded-lg px-3 py-1.5 ${selectedCategory.mode === "words" ? "bg-white text-ink shadow-sm" : "text-muted"}`}
+                                        onClick={() => setCategoryMode(level, selectedCategory.categoryId, "words")}
+                                      >
+                                        Palabras explícitas
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              <div className="flex items-end gap-2">
+                                {selectedCategory.mode !== "words" && (
+                                  <label className="block w-40 space-y-2">
+                                    <span className="text-xs font-bold text-ink-soft">
+                                      {selectedCategory.mode === "legacy" ? "Tarjetas actuales" : "Tarjetas objetivo"}
+                                    </span>
+                                    <input
+                                      className="field"
+                                      type="number"
+                                      min={1}
+                                      max={50}
+                                      value={selectedCategory.targetCardsCount}
+                                      disabled={selectedCategory.mode === "legacy"}
+                                      onChange={(event) =>
+                                        setCategoryTarget(
+                                          level,
+                                          selectedCategory.categoryId,
+                                          Number(event.target.value),
+                                        )
+                                      }
+                                      required={selectedCategory.mode === "target"}
+                                    />
+                                  </label>
+                                )}
+                                <button type="button" className="grid size-12 shrink-0 place-items-center rounded-xl bg-red-50 text-brand" onClick={() => removeCategory(level, selectedCategory.categoryId)} aria-label="Quitar categoría"><Trash2 className="size-4" /></button>
+                              </div>
                             </div>
-                            <div className="flex items-end gap-2">
-                              <label className="block w-40 space-y-2">
-                                <span className="text-xs font-bold text-ink-soft">
-                                  {selectedCategory.mode === "legacy" ? "Tarjetas actuales" : "Tarjetas objetivo"}
-                                </span>
-                                <input
-                                  className="field"
-                                  type="number"
-                                  min={1}
-                                  max={50}
-                                  value={selectedCategory.targetCardsCount}
-                                  disabled={selectedCategory.mode === "legacy"}
-                                  onChange={(event) =>
-                                    setCategoryTarget(
-                                      level,
-                                      selectedCategory.categoryId,
-                                      Number(event.target.value),
-                                    )
-                                  }
-                                  required={selectedCategory.mode === "target"}
+                            {selectedCategory.mode === "words" && selectedCategory.legacyWordCardIds === undefined && (
+                              <div className="rounded-xl bg-canvas p-4">
+                                <CategoryWordsEditor
+                                  words={selectedCategory.words ?? []}
+                                  onChange={(words) => setCategoryWords(level, selectedCategory.categoryId, words)}
                                 />
-                              </label>
-                              <button type="button" className="grid size-12 place-items-center rounded-xl bg-red-50 text-brand" onClick={() => removeCategory(level, selectedCategory.categoryId)} aria-label="Quitar categoría"><Trash2 className="size-4" /></button>
-                            </div>
+                                <div className="mt-3">
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-action-soft px-3 text-xs font-extrabold text-action disabled:opacity-50"
+                                    onClick={() => void previewCategoryWords(level, selectedCategory)}
+                                    disabled={(selectedCategory.words ?? []).length === 0}
+                                  >
+                                    <Search className="size-3.5" /> Previsualizar tarjetas
+                                  </button>
+                                </div>
+                                <CategoryWordsPreview
+                                  state={previewByKey[`${level.clientId}:${selectedCategory.categoryId}`]}
+                                  studentsById={studentsById}
+                                />
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1337,6 +1473,126 @@ function PlanFact({ icon, label }: { icon: React.ReactNode; label: string }) {
   return <span className="flex items-center gap-2 rounded-xl bg-canvas px-3 py-2 font-semibold text-ink-soft">{icon}{label}</span>;
 }
 
+function CategoryWordsEditor({
+  words,
+  onChange,
+}: {
+  words: string[];
+  onChange: (words: string[]) => void;
+}) {
+  const [pendingWord, setPendingWord] = useState("");
+
+  function commitPendingWord() {
+    const candidates = pendingWord
+      .split(",")
+      .map((word) => word.trim())
+      .filter(Boolean);
+    if (candidates.length === 0) return;
+    const next = [...words];
+    for (const candidate of candidates) {
+      if (next.length >= 50) break;
+      if (!next.some((existing) => existing.toLowerCase() === candidate.toLowerCase())) {
+        next.push(candidate);
+      }
+    }
+    onChange(next);
+    setPendingWord("");
+  }
+
+  return (
+    <div className="space-y-2">
+      <span className="text-xs font-bold text-ink-soft">Palabras seleccionadas ({words.length}/50)</span>
+      <div className="flex flex-wrap gap-2">
+        {words.length === 0 && <p className="text-xs font-semibold text-muted">Aún no hay palabras agregadas.</p>}
+        {words.map((word) => (
+          <span key={word} className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-extrabold text-brand">
+            {word}
+            <button
+              type="button"
+              onClick={() => onChange(words.filter((existing) => existing !== word))}
+              aria-label={`Quitar palabra ${word}`}
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          className="field flex-1"
+          value={pendingWord}
+          onChange={(event) => setPendingWord(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === ",") {
+              event.preventDefault();
+              commitPendingWord();
+            }
+          }}
+          placeholder="Escribe una palabra y presiona Enter o coma…"
+          maxLength={60}
+          disabled={words.length >= 50}
+        />
+        <button
+          type="button"
+          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl bg-action-soft px-3 text-sm font-extrabold text-action disabled:opacity-50"
+          onClick={commitPendingWord}
+          disabled={!pendingWord.trim() || words.length >= 50}
+        >
+          <Plus className="size-4" /> Agregar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CategoryWordsPreview({
+  state,
+  studentsById,
+}: {
+  state: CategoryPreviewState | undefined;
+  studentsById: Map<string, Student>;
+}) {
+  if (!state) return null;
+
+  if (state.status === "loading") {
+    return <p className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-muted">Cargando previsualización…</p>;
+  }
+
+  if (state.status === "error") {
+    return (
+      <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700" role="alert">
+        {state.error}
+      </p>
+    );
+  }
+
+  const students = state.students ?? [];
+  return (
+    <div className="mt-3 space-y-2 rounded-xl bg-white p-3">
+      <p className="text-xs font-extrabold uppercase tracking-[0.1em] text-muted">Previsualización por estudiante</p>
+      {students.length === 0 && <p className="text-xs font-semibold text-muted">No hay estudiantes en la audiencia.</p>}
+      <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+        {students.map((item) => {
+          const student = studentsById.get(item.student_id);
+          const label = student ? studentName(student) : `Estudiante ${item.student_id.slice(-6)}`;
+          return (
+            <div key={item.student_id} className="rounded-lg border border-line p-2 text-xs">
+              <strong className="text-ink">{label}</strong>
+              <p className="mt-1 text-muted">
+                {item.cards.length} tarjeta{item.cards.length === 1 ? "" : "s"} resuelta{item.cards.length === 1 ? "" : "s"}
+                {item.cards.length > 0 ? `: ${item.cards.map((card) => card.word).join(", ")}` : "."}
+              </p>
+              {item.unresolved_words.length > 0 && (
+                <p className="mt-1 font-bold text-amber-700">Sin resolver: {item.unresolved_words.join(", ")}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function studentAudienceLabel(item: StudentAudienceItem): string {
   return item.display_name || item.username || item.email;
 }
@@ -1399,11 +1655,28 @@ function validTargetCardsCount(value: number | undefined): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
+function categoryCardsPerStudent(category: LevelCategoryDraft): number {
+  if (category.mode === "legacy") {
+    return category.legacyWordCardIds?.length ?? category.targetCardsCount;
+  }
+  if (category.mode === "words") {
+    return category.words?.length ?? 0;
+  }
+  return category.targetCardsCount;
+}
+
 function toStudyPlanCategoryPayload(category: LevelCategoryDraft) {
   if (category.mode === "legacy" && category.legacyWordCardIds !== undefined) {
     return {
       category_id: category.categoryId,
       word_card_ids: category.legacyWordCardIds,
+    };
+  }
+
+  if (category.mode === "words") {
+    return {
+      category_id: category.categoryId,
+      word_card_words: category.words ?? [],
     };
   }
 

@@ -131,6 +131,8 @@ export type StudyPlanCategory = {
   target_cards_count?: number;
   /** Compatibilidad de lectura con planes creados antes de la audiencia v2. */
   word_card_ids?: string[];
+  /** Selección explícita de palabras por categoría, resuelta por estudiante al generar el día. */
+  word_card_words?: string[];
 };
 
 export type StudyPlanLevel = {
@@ -140,6 +142,14 @@ export type StudyPlanLevel = {
   start_date: string;
   end_date: string;
   categories: StudyPlanCategory[];
+};
+
+export type PreviewCategoryCardsResponse = {
+  students: Array<{
+    student_id: string;
+    cards: Array<{ id: string; word: string; status: string }>;
+    unresolved_words: string[];
+  }>;
 };
 
 export type StudyPlan = {
