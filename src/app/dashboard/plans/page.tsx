@@ -38,6 +38,7 @@ import type {
   StudyPlan,
   StudyPlanAudienceStudent,
   StudyPlanStatus,
+  WordCard,
 } from "@/lib/types";
 import { studentName } from "@/lib/types";
 
@@ -53,6 +54,12 @@ type CategoryPreviewState = {
   status: "loading" | "error" | "done";
   error?: string;
   students?: PreviewCategoryCardsResponse["students"];
+};
+
+type CategoryWordPoolState = {
+  status: "loading" | "error" | "done";
+  error?: string;
+  words?: string[];
 };
 
 type LevelDraft = {
@@ -131,6 +138,7 @@ export default function PlansPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [previewByKey, setPreviewByKey] = useState<Record<string, CategoryPreviewState>>({});
+  const [wordPoolByCategory, setWordPoolByCategory] = useState<Record<string, CategoryWordPoolState>>({});
 
   const categoryNames = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name])),
@@ -333,6 +341,11 @@ export default function PlansPage() {
     setIsAudienceSearching(false);
     setFormError(null);
     setPreviewByKey({});
+    for (const level of nextDraft.levels) {
+      for (const category of level.categories) {
+        if (category.mode === "words") void loadCategoryWordPool(category.categoryId);
+      }
+    }
   }
 
   function changeAudienceQuery(value: string) {
@@ -506,6 +519,33 @@ export default function PlansPage() {
           : category,
       ),
     });
+    if (mode === "words") void loadCategoryWordPool(categoryId);
+  }
+
+  async function loadCategoryWordPool(categoryId: string) {
+    if (wordPoolByCategory[categoryId]) return;
+    setWordPoolByCategory((current) => ({ ...current, [categoryId]: { status: "loading" } }));
+    try {
+      const cards = await apiFetch<WordCard[]>(`categories/${categoryId}/word-cards`);
+      const seen = new Set<string>();
+      const words: string[] = [];
+      for (const card of cards) {
+        const key = card.word.trim().toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        words.push(card.word.trim());
+      }
+      words.sort((a, b) => a.localeCompare(b, "es"));
+      setWordPoolByCategory((current) => ({ ...current, [categoryId]: { status: "done", words } }));
+    } catch (cause) {
+      setWordPoolByCategory((current) => ({
+        ...current,
+        [categoryId]: {
+          status: "error",
+          error: cause instanceof Error ? cause.message : "No fue posible cargar las tarjetas de la categoría.",
+        },
+      }));
+    }
   }
 
   function setCategoryWords(level: LevelDraft, categoryId: string, words: string[]) {
@@ -1231,6 +1271,8 @@ export default function PlansPage() {
                                 <CategoryWordsEditor
                                   words={selectedCategory.words ?? []}
                                   onChange={(words) => setCategoryWords(level, selectedCategory.categoryId, words)}
+                                  pool={wordPoolByCategory[selectedCategory.categoryId]}
+                                  onRetryPool={() => void loadCategoryWordPool(selectedCategory.categoryId)}
                                 />
                                 <div className="mt-3">
                                   <button
@@ -1476,11 +1518,16 @@ function PlanFact({ icon, label }: { icon: React.ReactNode; label: string }) {
 function CategoryWordsEditor({
   words,
   onChange,
+  pool,
+  onRetryPool,
 }: {
   words: string[];
   onChange: (words: string[]) => void;
+  pool: CategoryWordPoolState | undefined;
+  onRetryPool: () => void;
 }) {
   const [pendingWord, setPendingWord] = useState("");
+  const selectedLower = new Set(words.map((word) => word.toLowerCase()));
 
   function commitPendingWord() {
     const candidates = pendingWord
@@ -1500,7 +1547,45 @@ function CategoryWordsEditor({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <span className="text-xs font-bold text-ink-soft">Tarjetas de la categoría</span>
+        {(!pool || pool.status === "loading") && (
+          <p className="text-xs font-semibold text-muted">Cargando tarjetas de la categoría…</p>
+        )}
+        {pool?.status === "error" && (
+          <div className="flex items-center gap-2 rounded-xl bg-red-50 p-2 text-xs font-semibold text-red-700" role="alert">
+            <span>{pool.error}</span>
+            <button type="button" className="font-extrabold underline decoration-2 underline-offset-2" onClick={onRetryPool}>
+              Reintentar
+            </button>
+          </div>
+        )}
+        {pool?.status === "done" && (pool.words ?? []).length === 0 && (
+          <p className="text-xs font-semibold text-muted">Esta categoría todavía no tiene tarjetas creadas.</p>
+        )}
+        {pool?.status === "done" && (pool.words ?? []).length > 0 && (
+          <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-xl bg-white p-2">
+            {(pool.words ?? []).map((word) => {
+              const isSelected = selectedLower.has(word.toLowerCase());
+              return (
+                <button
+                  key={word}
+                  type="button"
+                  disabled={isSelected || words.length >= 50}
+                  className={`rounded-full px-3 py-1.5 text-xs font-extrabold disabled:opacity-50 ${
+                    isSelected ? "bg-brand-soft text-brand" : "bg-canvas text-ink-soft hover:bg-action-soft hover:text-action"
+                  }`}
+                  onClick={() => onChange([...words, word])}
+                >
+                  {isSelected ? "✓ " : "+ "}
+                  {word}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
       <span className="text-xs font-bold text-ink-soft">Palabras seleccionadas ({words.length}/50)</span>
       <div className="flex flex-wrap gap-2">
         {words.length === 0 && <p className="text-xs font-semibold text-muted">Aún no hay palabras agregadas.</p>}
