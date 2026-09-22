@@ -1,8 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowDown,
   ArrowRight,
-  BookOpenCheck,
   Box,
   CheckCircle2,
   Download,
@@ -119,7 +117,12 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 border-b border-white/70 bg-[#fffaf8]/88 backdrop-blur-xl">
         <div className="mx-auto flex h-[5.25rem] w-full max-w-[90rem] items-center justify-between gap-5 px-5 sm:px-8 lg:px-12">
           <Link href="/" aria-label="Ir al inicio de Lectura Aumentada">
-            <BrandMark subtitle="Aprender cobra vida" />
+            <div className="sm:hidden">
+              <BrandMark compact />
+            </div>
+            <div className="hidden sm:block">
+              <BrandMark subtitle="Aprender cobra vida" />
+            </div>
           </Link>
 
           <nav
@@ -153,39 +156,54 @@ export default function HomePage() {
       </header>
 
       <main id="contenido">
-        <section className="relative isolate">
-          <div className="pointer-events-none absolute left-[-9rem] top-16 -z-10 size-[28rem] rounded-full bg-brand/[0.08] blur-3xl" />
-          <div className="pointer-events-none absolute right-[-12rem] top-[-5rem] -z-10 size-[32rem] rounded-full bg-blue-200/35 blur-3xl" />
+        <section className="hero-scene relative isolate h-[calc(100svh-5.25rem)] overflow-hidden">
+          <div className="hero-artwork absolute inset-x-0 bottom-0 z-0 h-[48%] lg:inset-0 lg:h-auto">
+            <Image
+              src="/hero-immersive-concept-v4.webp"
+              fill
+              priority
+              sizes="100vw"
+              className="origin-bottom-right scale-[1.3] object-contain object-right-bottom sm:scale-[1.18] lg:scale-100"
+              alt="Teléfono con Lectura Aumentada mostrando la palabra GATO y un gato que sale de la pantalla"
+            />
+          </div>
+          <div className="hero-gradient pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,#fffaf8_0%,#fffaf8_44%,rgba(255,250,248,0.9)_55%,rgba(255,250,248,0)_72%)] lg:bg-[linear-gradient(90deg,#fffaf8_0%,#fffaf8_37%,rgba(255,250,248,0.88)_48%,rgba(255,250,248,0.12)_66%,rgba(255,250,248,0)_100%)]" />
 
-          <div className="mx-auto grid min-h-[calc(100svh-5.25rem)] w-full max-w-[90rem] items-center gap-12 px-5 py-14 sm:px-8 sm:py-20 lg:grid-cols-[0.88fr_1.12fr] lg:px-12 lg:py-16 xl:gap-16">
-            <div className="max-w-[42rem]">
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand/15 bg-white px-4 py-2 text-sm font-extrabold text-brand shadow-sm">
-                <Sparkles className="size-4" aria-hidden="true" />
-                Lectura, sonido y realidad aumentada
+          <div className="relative z-20 mx-auto flex h-full w-full max-w-[90rem] items-start px-5 pb-4 pt-6 sm:px-8 sm:pt-8 lg:items-center lg:px-12 lg:py-10">
+            <div className="hero-copy max-w-[42rem]">
+              <div className="hero-eyebrow mb-3 text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-brand sm:text-sm">
+                <span className="sm:hidden">Lectura y realidad aumentada</span>
+                <span className="hidden sm:inline">Lectura, sonido y realidad aumentada</span>
               </div>
 
-              <h1 className="text-balance text-[clamp(3rem,7vw,6.5rem)] font-black leading-[0.93] tracking-[-0.065em] text-ink">
-                Cada palabra puede convertirse en una{" "}
-                <span className="text-brand">experiencia.</span>
+              <h1 className="text-[clamp(2.55rem,12vw,4rem)] font-black leading-[0.93] tracking-[-0.06em] text-ink lg:text-[clamp(3.25rem,5.4vw,5.25rem)]">
+                <span className="block">Cada palabra</span>
+                <span className="block">se ve, se escucha</span>
+                <span className="block text-brand">y cobra vida.</span>
               </h1>
-              <p className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-ink-soft sm:text-xl sm:leading-9">
-                Lectura Aumentada une el método Doman, el acompañamiento docente y la
-                tecnología inmersiva para ayudar a cada estudiante a leer con curiosidad,
-                confianza y sentido.
+              <p className="hero-description mt-4 max-w-[35rem] text-pretty text-[0.98rem] leading-6 text-ink-soft sm:text-lg sm:leading-8 lg:text-xl lg:leading-9">
+                El método Doman y la tecnología inmersiva ayudan a cada estudiante a leer
+                con curiosidad, confianza y acompañamiento.
               </p>
 
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <DownloadButton />
+              <div className="hero-actions mt-5 flex items-center gap-2 sm:mt-7 sm:gap-3">
+                <span className="sm:hidden">
+                  <DownloadButton compact />
+                </span>
+                <span className="hidden sm:inline-flex">
+                  <DownloadButton />
+                </span>
                 <a
                   href="#como-funciona"
-                  className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full border border-line bg-white px-7 text-base font-extrabold text-ink shadow-sm transition hover:-translate-y-0.5 hover:border-brand/30 hover:text-brand"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-line bg-white/90 px-4 text-sm font-extrabold text-ink shadow-sm backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-brand/30 hover:text-brand sm:min-h-14 sm:px-7 sm:text-base"
                 >
                   <Play className="size-4 fill-current" aria-hidden="true" />
-                  Conocer la experiencia
+                  <span className="sm:hidden">Conocer más</span>
+                  <span className="hidden sm:inline">Conocer la experiencia</span>
                 </a>
               </div>
 
-              <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm font-bold text-muted">
+              <div className="hero-meta mt-5 hidden flex-wrap gap-x-6 gap-y-3 text-sm font-bold text-muted sm:flex">
                 <span className="inline-flex items-center gap-2">
                   <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />
                   Android 8.0 o superior
@@ -196,46 +214,6 @@ export default function HomePage() {
                 </span>
               </div>
             </div>
-
-            <div className="relative mx-auto w-full max-w-[48rem]">
-              <div className="landing-float absolute -left-5 top-10 z-10 hidden items-center gap-3 rounded-2xl border border-white bg-white/95 px-4 py-3 shadow-[0_18px_55px_rgba(30,41,59,0.14)] sm:flex">
-                <span className="grid size-10 place-items-center rounded-xl bg-brand-soft text-brand">
-                  <BookOpenCheck className="size-5" aria-hidden="true" />
-                </span>
-                <span>
-                  <strong className="block text-sm text-ink">Sesiones breves</strong>
-                  <span className="text-xs font-semibold text-muted">Atención con propósito</span>
-                </span>
-              </div>
-
-              <div className="overflow-hidden rounded-[2rem] border-[10px] border-white bg-white shadow-[0_35px_100px_rgba(30,41,59,0.18)] sm:rounded-[2.75rem]">
-                <Image
-                  src="/og.png"
-                  width={1536}
-                  height={1024}
-                  priority
-                  sizes="(max-width: 1024px) 100vw, 56vw"
-                  className="h-auto w-full"
-                  alt="Teléfono Android con Lectura Aumentada mostrando la palabra GATO y un gato en realidad aumentada"
-                />
-              </div>
-
-              <div className="landing-float-delayed absolute -bottom-5 right-3 z-10 hidden items-center gap-3 rounded-2xl bg-ink px-5 py-3 text-white shadow-[0_18px_55px_rgba(30,41,59,0.22)] sm:flex">
-                <Smartphone className="size-5 text-amber-300" aria-hidden="true" />
-                <span>
-                  <strong className="block text-sm">Una app, dos experiencias</strong>
-                  <span className="text-xs font-medium text-white/65">Estudiante y docente</span>
-                </span>
-              </div>
-            </div>
-
-            <a
-              href="#experiencia"
-              className="absolute bottom-5 left-1/2 hidden -translate-x-1/2 items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-muted transition hover:text-brand xl:flex"
-            >
-              Descubrir
-              <ArrowDown className="size-4" aria-hidden="true" />
-            </a>
           </div>
         </section>
 

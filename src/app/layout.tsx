@@ -37,7 +37,7 @@ export const metadata: Metadata = {
       "Lectura, sonido y realidad aumentada en una experiencia diseñada para estudiantes y docentes.",
     images: [
       {
-        url: "/og.png",
+        url: "/og.jpg",
         width: 1536,
         height: 1024,
         alt: "Lectura Aumentada funcionando en un teléfono Android",
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     title: "Lectura Aumentada | Leer cobra vida",
     description:
       "Lectura, sonido y realidad aumentada en una experiencia diseñada para estudiantes y docentes.",
-    images: ["/og.png"],
+    images: ["/og.jpg"],
   },
   icons: {
     icon: "/logo-lectura-aumentada.svg",
