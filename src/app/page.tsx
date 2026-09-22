@@ -19,9 +19,9 @@ import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 
 const APK_DOWNLOAD_URL =
-  "https://github.com/Autonoma-semillero/Lectura-Aumentada-mobile/releases/download/v1.0.0/lectura-aumentada-mobile-v1.0.0.apk";
+  "https://github.com/Autonoma-semillero/Lectura-Aumentada-mobile/releases/download/latest-apk/lectura-aumentada-mobile-latest.apk";
 const RELEASE_URL =
-  "https://github.com/Autonoma-semillero/Lectura-Aumentada-mobile/releases/tag/v1.0.0";
+  "https://github.com/Autonoma-semillero/Lectura-Aumentada-mobile/releases";
 
 const experiences: Array<{
   title: string;
