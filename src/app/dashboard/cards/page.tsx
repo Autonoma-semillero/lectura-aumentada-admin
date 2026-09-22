@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, Box, Edit3, Plus, Search, Upload, Volume2 } from "lucide-react";
+import { Archive, Box, Edit3, Plus, Search, Sparkles, Upload, Volume2 } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState, Modal, PageHeader, StatusBadge } from "@/components/ui-kit";
 import { apiFetch } from "@/lib/api-client";
 import type { ArModel, Category, Student, WordCard } from "@/lib/types";
@@ -13,9 +13,25 @@ type CardDraft = {
   categoryId: string;
   word: string;
   audioUrl: string;
+  audioSource: "generated" | "manual";
   learningUnitId: string;
   markerId: string;
 };
+
+let spanishSpeechSynthesizer: ReturnType<typeof loadSpanishSpeechSynthesizer> | undefined;
+
+async function loadSpanishSpeechSynthesizer() {
+  const { pipeline } = await import("@huggingface/transformers");
+  return pipeline("text-to-speech", "Xenova/mms-tts-spa", { dtype: "q8" });
+}
+
+async function generateAudioFile(word: string): Promise<File> {
+  spanishSpeechSynthesizer ??= loadSpanishSpeechSynthesizer();
+  const synthesizer = await spanishSpeechSynthesizer;
+  const output = await synthesizer(word);
+  if (Array.isArray(output)) throw new Error("El modelo devolvió un audio inesperado.");
+  return new File([output.toBlob()], `${word}.wav`, { type: "audio/wav" });
+}
 
 export default function CardsPage() {
   const [students, setStudents] = useState<Student[] | null>(null);
@@ -81,7 +97,7 @@ export default function CardsPage() {
   }
 
   function newDraft(): CardDraft {
-    return { studentId: students?.[0]?.id ?? "", categoryId, word: "", audioUrl: "", learningUnitId: "", markerId: "" };
+    return { studentId: students?.[0]?.id ?? "", categoryId, word: "", audioUrl: "", audioSource: "generated", learningUnitId: "", markerId: "" };
   }
 
   function editDraft(card: WordCard): CardDraft {
@@ -92,6 +108,7 @@ export default function CardsPage() {
       categoryId: card.category_id ?? categoryId,
       word: card.word,
       audioUrl: card.audio_url ?? "",
+      audioSource: "manual",
       learningUnitId: model?.learning_unit_id ?? "",
       markerId: model?.marker_id ?? "",
     };
@@ -121,12 +138,26 @@ export default function CardsPage() {
     }
   }
 
+  async function storeGeneratedAudio(word: string): Promise<string> {
+    const file = await generateAudioFile(word);
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch("/api/audio/upload", { method: "POST", body: formData });
+    const payload = (await response.json()) as { url?: string; message?: string };
+    if (!response.ok || !payload.url) throw new Error(payload.message ?? "No fue posible guardar el audio generado.");
+    return payload.url;
+  }
+
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!draft) return;
     setIsSaving(true);
     setFormError(null);
     try {
+      let audioUrl = draft.audioUrl.trim();
+      if (draft.audioSource === "generated") {
+        audioUrl = await storeGeneratedAudio(draft.word.trim());
+      }
       const model = models.find((item) => item.learning_unit_id === draft.learningUnitId);
       if (model) {
         await apiFetch("assets", {
@@ -138,7 +169,7 @@ export default function CardsPage() {
         ...(draft.id ? {} : { student_id: draft.studentId }),
         word: draft.word.trim(),
         category_id: draft.categoryId,
-        ...(draft.audioUrl.trim() ? { audio_url: draft.audioUrl.trim() } : {}),
+        ...(audioUrl ? { audio_url: audioUrl } : {}),
         ...(model ? { learning_unit_id: model.learning_unit_id } : {}),
       };
       await apiFetch(draft.id ? `word-cards/${draft.id}` : "word-cards", {
@@ -205,8 +236,19 @@ export default function CardsPage() {
               <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Temática</span><select className="field" value={draft.categoryId} onChange={(event) => setDraft({ ...draft, categoryId: event.target.value })}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
             </div>
             <div className="rounded-[22px] bg-canvas p-4">
-              <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">URL de pronunciación (opcional)</span><input className="field" type="url" value={draft.audioUrl} onChange={(event) => setDraft({ ...draft, audioUrl: event.target.value })} placeholder="https://…/palabra.mp3" /></label>
-              <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-extrabold text-action shadow-sm"><Upload className="size-4" /> {isUploading ? "Cargando…" : "Subir audio"}<input className="sr-only" type="file" accept=".m4a,.mp3,.wav,audio/*" disabled={isUploading} onChange={(event) => void uploadAudio(event.target.files?.[0])} /></label>
+              <strong className="text-sm text-ink-soft">Pronunciación</strong>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <button type="button" className={`rounded-2xl border px-4 py-3 text-left text-sm font-extrabold transition ${draft.audioSource === "generated" ? "border-brand bg-brand-soft text-brand" : "border-line bg-white text-muted"}`} onClick={() => setDraft({ ...draft, audioSource: "generated" })}><Sparkles className="mr-2 inline size-4" />Generar automáticamente</button>
+                <button type="button" className={`rounded-2xl border px-4 py-3 text-left text-sm font-extrabold transition ${draft.audioSource === "manual" ? "border-action bg-action-soft text-action" : "border-line bg-white text-muted"}`} onClick={() => setDraft({ ...draft, audioSource: "manual" })}><Upload className="mr-2 inline size-4" />Cargar manualmente</button>
+              </div>
+              {draft.audioSource === "generated" ? (
+                <p className="mt-3 text-sm leading-6 text-muted">Al guardar, se creará gratis la pronunciación de “{draft.word.trim() || "la palabra"}” en este navegador. La primera vez puede tardar mientras se descarga el modelo de voz.</p>
+              ) : (
+                <>
+                  <label className="mt-3 block space-y-2"><span className="text-sm font-bold text-ink-soft">URL de pronunciación (opcional)</span><input className="field" type="url" value={draft.audioUrl} onChange={(event) => setDraft({ ...draft, audioUrl: event.target.value })} placeholder="https://…/palabra.mp3" /></label>
+                  <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-extrabold text-action shadow-sm"><Upload className="size-4" /> {isUploading ? "Cargando…" : "Subir audio"}<input className="sr-only" type="file" accept=".m4a,.mp3,.wav,audio/*" disabled={isUploading} onChange={(event) => void uploadAudio(event.target.files?.[0])} /></label>
+                </>
+              )}
             </div>
             <div className="rounded-[22px] border border-brand-soft bg-white p-4">
               <div className="mb-3"><strong className="text-ink">Realidad aumentada</strong><p className="mt-1 text-sm text-muted">Selecciona un modelo ya guardado y el marcador que lo activará.</p></div>
@@ -216,7 +258,7 @@ export default function CardsPage() {
               </div>
             </div>
             {formError && <p className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{formError}</p>}
-            <div className="flex justify-end gap-3 pt-2"><button type="button" className="h-12 rounded-2xl px-5 font-bold text-muted" onClick={() => setDraft(null)}>Cancelar</button><button className="h-12 rounded-2xl bg-brand px-6 font-extrabold text-white disabled:opacity-60" disabled={isSaving || isUploading}>{isSaving ? "Guardando…" : "Guardar tarjeta"}</button></div>
+            <div className="flex justify-end gap-3 pt-2"><button type="button" className="h-12 rounded-2xl px-5 font-bold text-muted" onClick={() => setDraft(null)}>Cancelar</button><button className="h-12 rounded-2xl bg-brand px-6 font-extrabold text-white disabled:opacity-60" disabled={isSaving || isUploading}>{isSaving ? (draft.audioSource === "generated" ? "Generando audio…" : "Guardando…") : "Guardar tarjeta"}</button></div>
           </form>
         </Modal>
       )}

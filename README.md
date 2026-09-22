@@ -8,7 +8,7 @@ Dashboard web en Next.js para administrar la experiencia docente de Lectura Aume
 - Resumen general de estudiantes, temáticas, tarjetas y modelos 3D.
 - Estudiantes con avance total, progreso por temática, tarjetas dominadas y acceso al plan individual.
 - Temáticas: crear, editar, ordenar y eliminar.
-- Tarjetas: filtrar por estudiante/temática, crear, editar, archivar, cargar pronunciación y asociar contenido AR.
+- Tarjetas: filtrar por estudiante/temática, crear, editar, archivar, generar o cargar pronunciación y asociar contenido AR.
 - Planes de estudio Doman: generar, reemplazar, revisar historial y eliminar.
 - Modelos 3D: cargar o reemplazar los modelos GLB asociados a Hiro y Kanji.
 
@@ -72,5 +72,7 @@ Variables de entorno a definir en el proyecto de Vercel (ver [`.env.example`](./
 |---|---|---|
 | `BACKEND_BASE_URL` | URL base de la API del backend. Si se omite, se usa el valor por defecto del código. | Production, Preview |
 | `BLOB_READ_WRITE_TOKEN` | Requerida para que las cargas de GLB y audio persistan. Sin ella, los archivos se escriben en `public/uploads` y se pierden en cada despliegue. | Production, Preview |
+
+La generación automática de pronunciaciones usa el modelo abierto `Xenova/mms-tts-spa` mediante Transformers.js. Se ejecuta localmente en el navegador y no requiere una API de pago. La primera generación descarga el modelo; después el navegador puede reutilizarlo desde caché.
 
 Este proyecto no necesita `vercel.json`: Next.js se detecta sin configuración. El `vercel.json` del backend existe solo porque ese repositorio expone un entry serverless propio.
