@@ -11,7 +11,7 @@ export type TeacherProfile = {
 };
 
 const DEFAULT_BACKEND_URL =
-  "https://lectura-aumentada-back-end-6kt1.vercel.app/api";
+  "https://lectura-aumentada-backend-jc.vercel.app/api";
 
 export function getBackendUrl(path: string): string {
   const baseUrl = (process.env.BACKEND_BASE_URL ?? DEFAULT_BACKEND_URL)
