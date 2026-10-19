@@ -97,6 +97,65 @@ a {
   text-wrap: pretty;
 }
 
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--r, 0deg));
+  }
+  50% {
+    transform: translateY(-12px) rotate(calc(var(--r, 0deg) + 6deg));
+  }
+}
+
+@keyframes dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  40% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(16px);
+  }
+}
+
+.bob {
+  animation: bob 2.8s ease-in-out infinite;
+}
+
+.fl {
+  animation: floaty 3.4s ease-in-out infinite;
+}
+
+.dot {
+  animation: dot 1.3s ease-in-out infinite;
+}
+
+.drift {
+  animation: drift 7s ease-in-out infinite;
+}
+
 @media (min-width: 1024px) and (max-height: 700px) {
   .hero-scene h1 {
     font-size: clamp(3rem, 9vh, 4.25rem);

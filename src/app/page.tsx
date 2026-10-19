@@ -1,429 +1,523 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  ArrowRight,
-  Box,
-  CheckCircle2,
-  Download,
-  GraduationCap,
-  Headphones,
-  Layers3,
-  LineChart,
-  Play,
-  ShieldCheck,
-  Smartphone,
-  Sparkles,
-  UserRoundCheck,
-} from "lucide-react";
+import { Nunito } from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
-import { BrandMark } from "@/components/brand-mark";
+
+const nunito = Nunito({
+  subsets: ["latin"],
+  weight: ["400", "600", "800"],
+  variable: "--font-nunito",
+});
 
 const APK_DOWNLOAD_URL =
   "https://github.com/Autonoma-semillero/Lectura-Aumentada-mobile/releases/download/latest-apk/lectura-aumentada-mobile-latest.apk";
-const RELEASE_URL =
-  "https://github.com/Autonoma-semillero/Lectura-Aumentada-mobile/releases";
 
-const experiences: Array<{
+type Step = {
+  number: string;
+  numberBg: string;
+  numberColor: string;
+  cardBg: string;
   title: string;
   description: string;
-  icon: LucideIcon;
-  tone: string;
-}> = [
+  image: string;
+  alt: string;
+  imageHeight: number;
+  imageHeightClass: string;
+};
+
+const steps: Step[] = [
   {
-    title: "La lectura se escucha",
-    description:
-      "Cada tarjeta puede acompañarse de una pronunciación clara para reforzar la asociación entre palabra y sonido.",
-    icon: Headphones,
-    tone: "bg-blue-50 text-action",
+    number: "1",
+    numberBg: "bg-[#3D61BB]",
+    numberColor: "text-white",
+    cardBg: "bg-[#EAF0FC]",
+    title: "El profe crea la sala",
+    description: "Elige la lectura y la prepara desde su celular o su tablet.",
+    image: "/mascot/mascot-thumbs-up.png",
+    alt: "La mascota con el pulgar arriba",
+    imageHeight: 210,
+    imageHeightClass: "h-[210px]",
   },
   {
-    title: "La palabra cobra vida",
-    description:
-      "Los modelos 3D convierten conceptos abstractos en experiencias visuales cercanas, memorables y divertidas.",
-    icon: Box,
-    tone: "bg-amber-50 text-amber-700",
+    number: "2",
+    numberBg: "bg-[#147D82]",
+    numberColor: "text-white",
+    cardBg: "bg-[#DDF0F0]",
+    title: "Los niños entran",
+    description: "Abren la app y esperan a su profe. No hay nada que apretar.",
+    image: "/mascot/mascot-waiting.png",
+    alt: "La mascota esperando tranquila",
+    imageHeight: 196,
+    imageHeightClass: "h-[196px]",
   },
   {
-    title: "El avance se comprende",
-    description:
-      "Docentes y familias encuentran señales claras para acompañar el ritmo y los logros de cada estudiante.",
-    icon: LineChart,
-    tone: "bg-emerald-50 text-emerald-700",
+    number: "3",
+    numberBg: "bg-[#FFD66B]",
+    numberColor: "text-[#755400]",
+    cardBg: "bg-[#FFF1C8]",
+    title: "¡A leer juntos!",
+    description: "El profe empieza y toda la clase juega al mismo tiempo.",
+    image: "/mascot/mascot-celebrate.png",
+    alt: "La mascota celebrando",
+    imageHeight: 204,
+    imageHeightClass: "h-[204px]",
   },
 ];
 
-const journey: Array<{
-  step: string;
+const waitingHighlights: string[] = [
+  "Letras grandes y pocas palabras",
+  "Colores suaves que no cansan",
+  "Nada que apretar por error",
+];
+
+type AudienceCard = {
+  badgeText: string;
+  badgeBg: string;
+  badgeColor: string;
   title: string;
-  description: string;
-  icon: LucideIcon;
-}> = [
+  bullets: string[];
+  dotBg: string;
+};
+
+const audienceCards: AudienceCard[] = [
   {
-    step: "01",
-    title: "El docente diseña",
-    description:
-      "Organiza categorías, tarjetas, niveles y sesiones en un plan flexible que responde a cada proceso.",
-    icon: Layers3,
+    badgeText: "Para el profe",
+    badgeBg: "bg-[#EAF0FC]",
+    badgeColor: "text-[#3D61BB]",
+    title: "Tú mandas, ellos juegan",
+    bullets: [
+      "Crea la sala en un momento",
+      "Elige y prepara la lectura",
+      "Empieza la clase cuando todos estén listos",
+    ],
+    dotBg: "bg-[#3D61BB]",
   },
   {
-    step: "02",
-    title: "El estudiante descubre",
-    description:
-      "Ve la palabra, escucha su sonido y explora contenido aumentado en sesiones breves y enfocadas.",
-    icon: Sparkles,
-  },
-  {
-    step: "03",
-    title: "El progreso orienta",
-    description:
-      "Cada interacción alimenta una visión sencilla del avance para tomar mejores decisiones pedagógicas.",
-    icon: UserRoundCheck,
+    badgeText: "Para las familias",
+    badgeBg: "bg-[#DDF0F0]",
+    badgeColor: "text-[#0F6064]",
+    title: "Fácil para manitos pequeñas",
+    bullets: [
+      "Pantallas calmadas y claras",
+      "Letras grandes y pocas palabras",
+      "Todo se toca fácil con deditos pequeños",
+    ],
+    dotBg: "bg-[#147D82]",
   },
 ];
 
-function DownloadButton({ compact = false }: { compact?: boolean }) {
+type MascotMoment = {
+  title: string;
+  image: string;
+  alt: string;
+  cardBg: string;
+  imageHeight: number;
+  imageHeightClass: string;
+};
+
+const mascotMoments: MascotMoment[] = [
+  {
+    title: "Saluda",
+    image: "/mascot/mascot-wave.png",
+    alt: "La mascota saluda",
+    cardBg: "bg-[#EAF0FC]",
+    imageHeight: 220,
+    imageHeightClass: "h-[220px]",
+  },
+  {
+    title: "Pregunta",
+    image: "/mascot/mascot-curious.png",
+    alt: "La mascota con cara de curiosidad",
+    cardBg: "bg-[#DDF0F0]",
+    imageHeight: 220,
+    imageHeightClass: "h-[220px]",
+  },
+  {
+    title: "Celebra",
+    image: "/mascot/mascot-celebrate.png",
+    alt: "La mascota celebra",
+    cardBg: "bg-[#FFF1C8]",
+    imageHeight: 220,
+    imageHeightClass: "h-[220px]",
+  },
+  {
+    title: "Te anima",
+    image: "/mascot/mascot-thumbs-up.png",
+    alt: "La mascota con el pulgar arriba",
+    cardBg: "bg-[#F7DAD7]",
+    imageHeight: 200,
+    imageHeightClass: "h-[200px]",
+  },
+];
+
+function CheckIcon({ stroke }: { stroke: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M3 8.5l3.2 3.2L13 4.8"
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DownloadButton() {
   return (
     <a
+      className="cta rounded-full bg-[#C62828] px-9 py-[18px] text-xl font-extrabold leading-[26px] text-white shadow-[0_6px_0_#A91F1D] transition hover:-translate-y-0.5"
       href={APK_DOWNLOAD_URL}
       target="_blank"
       rel="noreferrer"
-      className={`group inline-flex items-center justify-center gap-2 rounded-full bg-brand font-extrabold text-white shadow-[0_16px_36px_rgba(229,55,52,0.24)] transition duration-200 hover:-translate-y-0.5 hover:bg-brand-dark focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand ${
-        compact ? "h-11 px-5 text-sm" : "min-h-14 px-7 text-base"
-      }`}
-      aria-label="Descargar Lectura Aumentada para Android, versión 1.0.0"
+      aria-label="Descargar Lectura Aumentada para Android"
     >
-      <Download className={compact ? "size-4" : "size-5"} aria-hidden="true" />
-      {compact ? "Descargar app" : "Descargar para Android"}
-      {!compact && (
-        <ArrowRight
-          className="size-4 transition-transform group-hover:translate-x-0.5"
-          aria-hidden="true"
-        />
-      )}
+      Descargar la app
     </a>
   );
 }
 
 export default function HomePage() {
   return (
-    <div className="landing-page min-h-screen overflow-x-hidden bg-[#fffaf8] text-ink">
+    <div
+      className={`${nunito.variable} w-full overflow-x-hidden bg-[#FFFDF7] font-[family-name:var(--font-nunito)] text-[#26324B]`}
+    >
       <a
-        href="#contenido"
-        className="fixed left-4 top-4 z-[100] -translate-y-24 rounded-full bg-ink px-5 py-3 font-bold text-white transition focus:translate-y-0"
+        href="#inicio"
+        className="fixed left-4 top-4 z-[100] -translate-y-24 rounded-full bg-[#26324B] px-5 py-3 font-bold text-white transition focus:translate-y-0"
       >
         Ir al contenido
       </a>
 
-      <header className="sticky top-0 z-50 border-b border-white/70 bg-[#fffaf8]/88 backdrop-blur-xl">
-        <div className="mx-auto flex h-[5.25rem] w-full max-w-[90rem] items-center justify-between gap-5 px-5 sm:px-8 lg:px-12">
-          <Link href="/" aria-label="Ir al inicio de Lectura Aumentada">
-            <div className="sm:hidden">
-              <BrandMark compact />
-            </div>
-            <div className="hidden sm:block">
-              <BrandMark subtitle="Aprender cobra vida" />
-            </div>
+      <header className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-4 px-6 py-5">
+        <a href="#inicio" className="flex items-center gap-3">
+          <span className="relative block size-12 shrink-0 overflow-hidden rounded-full">
+            <Image
+              src="/logo-lectura-aumentada.png"
+              alt=""
+              aria-hidden="true"
+              fill
+              sizes="48px"
+              className="object-cover"
+            />
+          </span>
+          <span className="text-xl font-extrabold leading-[26px]">Lectura Aumentada</span>
+        </a>
+        <nav className="flex flex-wrap items-center gap-2 text-lg font-semibold leading-[26px] sm:gap-6">
+          <Link className="px-1 py-2.5 text-[#26324B]" href="/login">
+            Panel docente
           </Link>
-
-          <nav
-            className="hidden items-center gap-7 text-sm font-bold text-ink-soft lg:flex"
-            aria-label="Navegación pública"
+          <a
+            className="cta rounded-full bg-[#C62828] px-6 py-3 font-extrabold text-white transition hover:-translate-y-0.5"
+            href="#descargar"
           >
-            <a className="transition hover:text-brand" href="#experiencia">
-              La experiencia
-            </a>
-            <a className="transition hover:text-brand" href="#como-funciona">
-              Cómo funciona
-            </a>
-            <a className="transition hover:text-brand" href="#para-quien">
-              Para quién
-            </a>
-          </nav>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/login"
-              className="inline-flex h-11 items-center justify-center rounded-full px-3 text-sm font-extrabold text-ink-soft transition hover:bg-white hover:text-brand sm:px-5"
-            >
-              <GraduationCap className="mr-2 hidden size-4 sm:block" aria-hidden="true" />
-              Panel docente
-            </Link>
-            <span className="hidden sm:block">
-              <DownloadButton compact />
-            </span>
-          </div>
-        </div>
+            Descargar
+          </a>
+        </nav>
       </header>
 
       <main id="contenido">
-        <section className="hero-scene relative isolate h-[calc(100svh-5.25rem)] overflow-hidden">
-          <div className="hero-artwork absolute inset-x-0 bottom-0 z-0 h-[48%] lg:inset-0 lg:h-auto">
-            <Image
-              src="/hero-immersive-concept-v4.webp"
-              fill
-              priority
-              sizes="100vw"
-              className="origin-bottom-right scale-[1.3] object-contain object-right-bottom sm:scale-[1.18] lg:scale-100"
-              alt="Teléfono con Lectura Aumentada mostrando la palabra GATO y un gato que sale de la pantalla"
-            />
-          </div>
-          <div className="hero-gradient pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,#fffaf8_0%,#fffaf8_44%,rgba(255,250,248,0.9)_55%,rgba(255,250,248,0)_72%)] lg:bg-[linear-gradient(90deg,#fffaf8_0%,#fffaf8_37%,rgba(255,250,248,0.88)_48%,rgba(255,250,248,0.12)_66%,rgba(255,250,248,0)_100%)]" />
-
-          <div className="relative z-20 mx-auto flex h-full w-full max-w-[90rem] items-start px-5 pb-4 pt-6 sm:px-8 sm:pt-8 lg:items-center lg:px-12 lg:py-10">
-            <div className="hero-copy max-w-[42rem]">
-              <div className="hero-eyebrow mb-3 text-[0.7rem] font-extrabold uppercase tracking-[0.14em] text-brand sm:text-sm">
-                <span className="sm:hidden">Lectura y realidad aumentada</span>
-                <span className="hidden sm:inline">Lectura, sonido y realidad aumentada</span>
-              </div>
-
-              <h1 className="text-[clamp(2.55rem,12vw,4rem)] font-black leading-[0.93] tracking-[-0.06em] text-ink lg:text-[clamp(3.25rem,5.4vw,5.25rem)]">
-                <span className="block">Cada palabra</span>
-                <span className="block">se ve, se escucha</span>
-                <span className="block text-brand">y cobra vida.</span>
-              </h1>
-              <p className="hero-description mt-4 max-w-[35rem] text-pretty text-[0.98rem] leading-6 text-ink-soft sm:text-lg sm:leading-8 lg:text-xl lg:leading-9">
-                El método Doman y la tecnología inmersiva ayudan a cada estudiante a leer
-                con curiosidad, confianza y acompañamiento.
-              </p>
-
-              <div className="hero-actions mt-5 flex items-center gap-2 sm:mt-7 sm:gap-3">
-                <span className="sm:hidden">
-                  <DownloadButton compact />
-                </span>
-                <span className="hidden sm:inline-flex">
-                  <DownloadButton />
-                </span>
-                <a
-                  href="#como-funciona"
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-line bg-white/90 px-4 text-sm font-extrabold text-ink shadow-sm backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-brand/30 hover:text-brand sm:min-h-14 sm:px-7 sm:text-base"
-                >
-                  <Play className="size-4 fill-current" aria-hidden="true" />
-                  <span className="sm:hidden">Conocer más</span>
-                  <span className="hidden sm:inline">Conocer la experiencia</span>
-                </a>
-              </div>
-
-              <div className="hero-meta mt-5 hidden flex-wrap gap-x-6 gap-y-3 text-sm font-bold text-muted sm:flex">
-                <span className="inline-flex items-center gap-2">
-                  <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />
-                  Android 8.0 o superior
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <ShieldCheck className="size-4 text-action" aria-hidden="true" />
-                  Descarga directa v1.0.0
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="experiencia" className="scroll-mt-28 bg-white py-20 sm:py-28">
-          <div className="mx-auto w-full max-w-[90rem] px-5 sm:px-8 lg:px-12">
-            <div className="grid gap-10 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
-              <div>
-                <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-brand">
-                  Una experiencia multisensorial
-                </p>
-                <h2 className="mt-4 max-w-xl text-balance text-4xl font-black tracking-[-0.05em] text-ink sm:text-5xl lg:text-6xl">
-                  Leer también es ver, escuchar y descubrir.
-                </h2>
-              </div>
-              <p className="max-w-2xl text-lg leading-8 text-muted lg:justify-self-end">
-                La tecnología no reemplaza la relación pedagógica: la hace más visible.
-                Cada elemento está diseñado para reducir distracciones, reforzar la atención
-                y celebrar el avance sin convertir el aprendizaje en una competencia.
-              </p>
-            </div>
-
-            <div className="mt-14 grid gap-5 md:grid-cols-3">
-              {experiences.map(({ title, description, icon: Icon, tone }) => (
-                <article
-                  key={title}
-                  className="group rounded-[2rem] border border-line bg-[#fffdfc] p-7 transition duration-300 hover:-translate-y-1 hover:border-brand/20 hover:shadow-[0_24px_70px_rgba(30,41,59,0.09)] sm:p-8"
-                >
-                  <span className={`grid size-14 place-items-center rounded-2xl ${tone}`}>
-                    <Icon className="size-6" strokeWidth={2.25} aria-hidden="true" />
-                  </span>
-                  <h3 className="mt-8 text-2xl font-black tracking-[-0.035em] text-ink">
-                    {title}
-                  </h3>
-                  <p className="mt-3 text-base leading-7 text-muted">{description}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="como-funciona" className="scroll-mt-28 py-20 sm:py-28">
-          <div className="mx-auto w-full max-w-[90rem] px-5 sm:px-8 lg:px-12">
-            <div className="mx-auto max-w-3xl text-center">
-              <p className="text-sm font-extrabold uppercase tracking-[0.18em] text-brand">
-                Una ruta simple y humana
-              </p>
-              <h2 className="mt-4 text-balance text-4xl font-black tracking-[-0.05em] text-ink sm:text-5xl lg:text-6xl">
-                Cada sesión tiene una intención.
-              </h2>
-              <p className="mt-5 text-lg leading-8 text-muted">
-                Del diseño del plan al acompañamiento del progreso, toda la experiencia
-                mantiene al estudiante en el centro.
-              </p>
-            </div>
-
-            <div className="relative mt-16 grid gap-5 lg:grid-cols-3">
-              <div className="absolute left-[16%] right-[16%] top-[2.25rem] hidden border-t-2 border-dashed border-brand/20 lg:block" />
-              {journey.map(({ step, title, description, icon: Icon }) => (
-                <article
-                  key={step}
-                  className="relative rounded-[2rem] border border-line bg-white p-7 shadow-[0_16px_55px_rgba(30,41,59,0.06)] sm:p-8"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="relative z-10 grid size-[4.5rem] place-items-center rounded-[1.4rem] bg-brand text-white shadow-[0_14px_30px_rgba(229,55,52,0.2)]">
-                      <Icon className="size-7" aria-hidden="true" />
-                    </span>
-                    <span className="text-4xl font-black tracking-[-0.05em] text-brand/[0.14]">
-                      {step}
-                    </span>
-                  </div>
-                  <h3 className="mt-7 text-2xl font-black tracking-[-0.035em] text-ink">
-                    {title}
-                  </h3>
-                  <p className="mt-3 leading-7 text-muted">{description}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="para-quien" className="scroll-mt-28 bg-ink py-20 text-white sm:py-28">
-          <div className="mx-auto grid w-full max-w-[90rem] gap-6 px-5 sm:px-8 lg:grid-cols-2 lg:px-12">
-            <article className="relative overflow-hidden rounded-[2.25rem] bg-brand p-8 sm:p-10 lg:p-12">
-              <div className="absolute -right-20 -top-20 size-64 rounded-full border-[48px] border-white/10" />
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.14] px-4 py-2 text-sm font-extrabold">
-                <Sparkles className="size-4" aria-hidden="true" /> Para estudiantes
-              </span>
-              <h2 className="relative mt-8 max-w-lg text-balance text-4xl font-black tracking-[-0.05em] sm:text-5xl">
-                Una experiencia clara, amable y sorprendente.
-              </h2>
-              <ul className="relative mt-8 space-y-4 text-white/85">
-                {[
-                  "Sesiones cortas que favorecen la atención.",
-                  "Audio, tarjetas y modelos 3D en una misma práctica.",
-                  "Progreso visible sin presión ni comparaciones.",
-                ].map((item) => (
-                  <li key={item} className="flex gap-3 leading-7">
-                    <CheckCircle2 className="mt-1 size-5 shrink-0 text-amber-300" aria-hidden="true" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </article>
-
-            <article className="relative overflow-hidden rounded-[2.25rem] border border-white/[0.12] bg-white/[0.07] p-8 sm:p-10 lg:p-12">
-              <div className="absolute -bottom-24 -right-24 size-72 rounded-full bg-blue-400/15 blur-2xl" />
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-extrabold text-blue-200">
-                <GraduationCap className="size-4" aria-hidden="true" /> Para docentes
-              </span>
-              <h2 className="relative mt-8 max-w-lg text-balance text-4xl font-black tracking-[-0.05em] sm:text-5xl">
-                Planeación flexible con información que sí orienta.
-              </h2>
-              <ul className="relative mt-8 space-y-4 text-white/72">
-                {[
-                  "Planes por niveles, fechas, categorías y estudiantes.",
-                  "Control de sesiones, tiempos y contenidos individuales.",
-                  "Seguimiento del proceso desde un panel unificado.",
-                ].map((item) => (
-                  <li key={item} className="flex gap-3 leading-7">
-                    <CheckCircle2 className="mt-1 size-5 shrink-0 text-blue-300" aria-hidden="true" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Link
-                href="/login"
-                className="relative mt-9 inline-flex min-h-12 items-center gap-2 rounded-full bg-white px-6 font-extrabold text-ink transition hover:-translate-y-0.5 hover:text-brand"
+        <section
+          id="inicio"
+          className="mx-auto flex max-w-[1120px] flex-wrap items-center gap-12 px-6 py-10 pb-[72px]"
+        >
+          <div className="flex min-w-0 flex-1 basis-[460px] flex-col items-start gap-6">
+            <h1 className="text-[clamp(38px,6vw,60px)] font-extrabold leading-[1.1] text-[#26324B]">
+              Aprender a leer es un juego
+            </h1>
+            <p className="max-w-[520px] text-xl leading-[30px] text-[#637083]">
+              El profe abre la sala. Los niños entran desde el celular. ¡Y todos leen
+              juntos!
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-4">
+              <a
+                href="#descargar"
+                className="cta rounded-full bg-[#C62828] px-9 py-[18px] text-xl font-extrabold leading-[26px] text-white shadow-[0_6px_0_#A91F1D] transition hover:-translate-y-0.5"
               >
-                Ingresar al panel
-                <ArrowRight className="size-4" aria-hidden="true" />
-              </Link>
-            </article>
+                Descargar la app
+              </a>
+            </div>
+          </div>
+
+          <div className="flex min-w-0 flex-1 basis-[380px] justify-center">
+            <div className="relative mt-10 aspect-square w-[420px] max-w-full">
+              <div className="absolute inset-0 rounded-full bg-[#FFD66B]" aria-hidden="true" />
+              <Image
+                src="/mascot/mascot-wave.png"
+                alt="Nuestra mascota saluda con la mano"
+                width={360}
+                height={400}
+                className="bob absolute bottom-[14px] left-1/2 h-[112%] w-auto -translate-x-1/2 object-contain"
+              />
+              <div
+                aria-hidden="true"
+                className="fl absolute left-[-6px] top-14 flex size-16 items-center justify-center rounded-full bg-[#3D61BB] text-[34px] font-extrabold text-white [--r:-10deg]"
+              >
+                A
+              </div>
+              <div
+                aria-hidden="true"
+                className="fl absolute right-[-4px] top-5 flex size-[58px] items-center justify-center rounded-full bg-white text-[30px] font-extrabold text-[#755400] shadow-[0_4px_0_rgba(117,84,0,0.2)] [--r:8deg] [animation-delay:-1.2s]"
+              >
+                B
+              </div>
+              <div
+                aria-hidden="true"
+                className="fl absolute bottom-[90px] right-2 flex size-[54px] items-center justify-center rounded-full bg-[#147D82] text-[28px] font-extrabold text-white [--r:-6deg] [animation-delay:-2.1s]"
+              >
+                C
+              </div>
+            </div>
           </div>
         </section>
 
-        <section id="descargar" className="scroll-mt-28 py-20 sm:py-28">
-          <div className="mx-auto w-full max-w-[90rem] px-5 sm:px-8 lg:px-12">
-            <div className="relative overflow-hidden rounded-[2.5rem] bg-[#f8e3de] px-6 py-12 sm:px-12 sm:py-16 lg:px-16 lg:py-20">
-              <div className="absolute -right-28 -top-32 size-[28rem] rounded-full bg-brand/12" />
-              <div className="absolute -bottom-36 right-40 size-80 rounded-full bg-blue-200/45" />
+        <section id="como-funciona" className="bg-white py-20">
+          <div className="mx-auto flex max-w-[1120px] flex-col gap-10 px-6">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <h2 className="text-[clamp(30px,4.5vw,42px)] font-extrabold leading-[1.15]">
+                Así de fácil
+              </h2>
+              <p className="text-xl leading-[30px] text-[#637083]">
+                Tres pasos y la clase empieza.
+              </p>
+            </div>
 
-              <div className="relative grid gap-12 lg:grid-cols-[1fr_0.72fr] lg:items-center">
-                <div>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white/75 px-4 py-2 text-sm font-extrabold text-brand">
-                    <Smartphone className="size-4" aria-hidden="true" />
-                    Disponible para Android
-                  </span>
-                  <h2 className="mt-6 max-w-3xl text-balance text-4xl font-black tracking-[-0.055em] text-ink sm:text-5xl lg:text-6xl">
-                    Lleva el aprendizaje aumentado a cada sesión.
-                  </h2>
-                  <p className="mt-5 max-w-2xl text-lg leading-8 text-ink-soft">
-                    Descarga la versión más reciente, instálala en tu dispositivo e inicia
-                    sesión con tu cuenta de estudiante o docente.
-                  </p>
-                  <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <DownloadButton />
-                    <a
-                      href={RELEASE_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full px-6 font-extrabold text-ink-soft transition hover:bg-white/65 hover:text-brand"
+            <div className="flex flex-wrap gap-6">
+              {steps.map((step) => (
+                <div
+                  key={step.number}
+                  className={`flex min-w-0 flex-1 basis-[300px] flex-col overflow-hidden rounded-[28px] ${step.cardBg}`}
+                >
+                  <div className="flex flex-col gap-2.5 px-7 pt-7">
+                    <span
+                      className={`flex size-11 items-center justify-center rounded-full text-[22px] font-extrabold ${step.numberBg} ${step.numberColor}`}
                     >
-                      Ver notas de la versión
-                      <ArrowRight className="size-4" aria-hidden="true" />
-                    </a>
+                      {step.number}
+                    </span>
+                    <h3 className="text-2xl font-extrabold leading-[30px]">{step.title}</h3>
+                    <p className="text-lg leading-[26px] text-[#4B586D]">
+                      {step.description}
+                    </p>
                   </div>
-                  <p className="mt-5 text-sm leading-6 text-muted">
-                    Versión preliminar v1.0.0 para validación. Es posible que Android solicite
-                    autorizar la instalación desde el navegador.
-                  </p>
+                  <div className="relative mt-4 h-[220px]">
+                    <Image
+                      src={step.image}
+                      alt={step.alt}
+                      width={200}
+                      height={step.imageHeight}
+                      className={`absolute bottom-0 left-1/2 w-auto -translate-x-1/2 object-contain ${step.imageHeightClass}`}
+                    />
+                  </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-                <ol className="relative space-y-3" aria-label="Pasos para instalar la aplicación">
-                  {[
-                    ["1", "Descarga el APK", "Abre el archivo cuando finalice la descarga."],
-                    ["2", "Autoriza la instalación", "Android te guiará si necesita un permiso adicional."],
-                    ["3", "Inicia tu experiencia", "Entra con tu usuario o correo y contraseña."],
-                  ].map(([number, title, description]) => (
-                    <li key={number} className="flex gap-4 rounded-2xl border border-white/70 bg-white/70 p-4 backdrop-blur-sm sm:p-5">
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand font-black text-white">
-                        {number}
-                      </span>
-                      <span>
-                        <strong className="block text-base text-ink">{title}</strong>
-                        <span className="mt-1 block text-sm leading-6 text-muted">{description}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ol>
+        <section className="bg-[#3D61BB] py-20 text-white">
+          <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-center gap-14 px-6">
+            <div className="flex min-w-0 flex-1 basis-[420px] flex-col gap-5">
+              <h2 className="text-[clamp(30px,4.5vw,42px)] font-extrabold leading-[1.15]">
+                Esperar también es divertido
+              </h2>
+              <p className="max-w-[480px] text-xl leading-[30px]">
+                Mientras llega el profe, el niño ve a su amigo y una pantalla tranquila.
+                Sin textos largos y sin botones.
+              </p>
+              <ul className="mt-2 flex flex-col gap-3.5">
+                {waitingHighlights.map((item) => (
+                  <li
+                    key={item}
+                    className="flex items-center gap-3 text-lg font-semibold leading-[26px]"
+                  >
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#FFD66B]">
+                      <CheckIcon stroke="#755400" />
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="shrink-0 rounded-[44px] bg-[#26324B] p-2.5 shadow-[0_12px_0_rgba(0,0,0,0.18)]">
+              <div className="relative h-[606px] w-[280px] overflow-hidden rounded-[34px] bg-[#FFFDF7] text-[#26324B]">
+                <div
+                  aria-hidden="true"
+                  className="drift absolute left-[-17px] top-[95px] h-[27px] w-[86px] rounded-full bg-[#3D61BB] opacity-10"
+                />
+                <div
+                  aria-hidden="true"
+                  className="drift absolute left-[181px] top-[179px] h-[30px] w-[108px] rounded-full bg-[#3D61BB] opacity-10 [animation-delay:-3s]"
+                />
+                <div className="absolute inset-x-0 top-[43px] flex justify-center">
+                  <span className="flex items-center gap-2.5 rounded-full bg-[#E3F1E4] py-2 pl-2.5 pr-[13px]">
+                    <span className="flex size-[19px] items-center justify-center rounded-full bg-[#2E7D32]">
+                      <CheckIcon stroke="#FFFFFF" />
+                    </span>
+                    <span className="text-sm font-semibold leading-5 text-[#1F5E24]">
+                      ¡Ya estás en la sala!
+                    </span>
+                  </span>
+                </div>
+                <div
+                  aria-hidden="true"
+                  className="fl absolute left-7 top-[126px] flex size-[43px] items-center justify-center rounded-full bg-[#3D61BB] text-xl font-extrabold text-white [--r:-10deg]"
+                >
+                  A
+                </div>
+                <div
+                  aria-hidden="true"
+                  className="fl absolute left-[210px] top-[115px] flex size-10 items-center justify-center rounded-full bg-[#FFD66B] text-lg font-extrabold text-[#755400] [--r:8deg] [animation-delay:-1.2s]"
+                >
+                  B
+                </div>
+                <div
+                  aria-hidden="true"
+                  className="fl absolute left-[19px] top-[286px] flex size-[37px] items-center justify-center rounded-full bg-[#147D82] text-base font-extrabold text-white [--r:-6deg] [animation-delay:-2.1s]"
+                >
+                  C
+                </div>
+                <div
+                  aria-hidden="true"
+                  className="absolute left-[-65px] top-[392px] h-[373px] w-[409px] rounded-full bg-[#FFD66B]"
+                />
+                <Image
+                  src="/mascot/mascot-waiting.png"
+                  alt=""
+                  aria-hidden="true"
+                  width={160}
+                  height={161}
+                  className="bob absolute left-[89px] top-[237px] h-[161px] w-auto object-contain"
+                />
+                <div className="absolute inset-x-[17px] top-[422px] flex flex-col items-center gap-2 rounded-[28px] bg-white px-[17px] py-[16px] text-center shadow-[0_6px_0_rgba(117,84,0,0.18)]">
+                  <p className="text-2xl font-extrabold leading-[34px] text-[#26324B]">
+                    ¡Ya casi!
+                  </p>
+                  <p className="text-lg leading-[26px] text-[#637083]">
+                    Tu profe está preparando la clase
+                  </p>
+                  <div className="mt-2.5 flex gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="dot size-[10px] rounded-full bg-[#3D61BB]"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="dot size-[10px] rounded-full bg-[#147D82] [animation-delay:0.18s]"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="dot size-[10px] rounded-full bg-[#FFD66B] [animation-delay:0.36s]"
+                    />
+                  </div>
+                </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="para-quien" className="py-20">
+          <div className="mx-auto flex max-w-[1120px] flex-col gap-10 px-6">
+            <h2 className="text-center text-[clamp(30px,4.5vw,42px)] font-extrabold leading-[1.15]">
+              Pensada para toda la clase
+            </h2>
+            <div className="flex flex-wrap gap-6">
+              {audienceCards.map((card) => (
+                <div
+                  key={card.title}
+                  className="flex min-w-0 flex-1 basis-[400px] flex-col gap-[18px] rounded-[28px] bg-white p-8 shadow-[0_6px_0_rgba(117,84,0,0.14)]"
+                >
+                  <span
+                    className={`self-start rounded-full px-4 py-1.5 text-[15px] font-extrabold leading-5 ${card.badgeBg} ${card.badgeColor}`}
+                  >
+                    {card.badgeText}
+                  </span>
+                  <h3 className="text-[28px] font-extrabold leading-[34px]">{card.title}</h3>
+                  <ul className="flex flex-col gap-3 text-lg leading-[26px] text-[#4B586D]">
+                    {card.bullets.map((bullet) => (
+                      <li key={bullet} className="flex items-start gap-3">
+                        <span
+                          aria-hidden="true"
+                          className={`mt-[7px] size-3 shrink-0 rounded-full ${card.dotBg}`}
+                        />
+                        {bullet}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white py-20">
+          <div className="mx-auto flex max-w-[1120px] flex-col gap-10 px-6">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <h2 className="text-[clamp(30px,4.5vw,42px)] font-extrabold leading-[1.15]">
+                Conoce a nuestro amigo
+              </h2>
+              <p className="max-w-[560px] text-xl leading-[30px] text-[#637083]">
+                Está en cada clase: saluda, pregunta, celebra y te anima.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-5">
+              {mascotMoments.map((moment) => (
+                <div
+                  key={moment.title}
+                  className={`flex min-w-0 flex-1 basis-[220px] flex-col items-center overflow-hidden rounded-[28px] ${moment.cardBg}`}
+                >
+                  <span className="pt-[22px] text-xl font-extrabold leading-[26px]">
+                    {moment.title}
+                  </span>
+                  <div className="relative h-[250px] w-full">
+                    <Image
+                      src={moment.image}
+                      alt={moment.alt}
+                      width={200}
+                      height={moment.imageHeight}
+                      className={`absolute bottom-4 left-1/2 w-auto -translate-x-1/2 object-contain ${moment.imageHeightClass}`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="descargar" className="bg-[#FFD66B] pt-[72px]">
+          <div className="mx-auto flex max-w-[1120px] flex-wrap items-end justify-center gap-10 px-6">
+            <div className="flex min-w-0 flex-1 basis-[420px] flex-col items-start gap-5 pb-[72px]">
+              <h2 className="text-[clamp(34px,5vw,52px)] font-extrabold leading-[1.1] text-[#26324B]">
+                ¿Listos para leer?
+              </h2>
+              <p className="max-w-[480px] text-xl font-semibold leading-[30px] text-[#755400]">
+                Baja la app y prepara la primera clase.
+              </p>
+              <DownloadButton />
+            </div>
+            <div className="flex min-w-0 flex-[0_1_380px] justify-center">
+              <Image
+                src="/mascot/mascot-celebrate.png"
+                alt="La mascota celebra"
+                width={300}
+                height={340}
+                className="bob mb-2 h-[340px] w-auto object-contain"
+              />
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-line bg-white">
-        <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-6 px-5 py-8 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-12">
-          <BrandMark subtitle="Aprender cobra vida" />
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm font-bold text-muted">
-            <a className="transition hover:text-brand" href="#experiencia">
-              La experiencia
-            </a>
-            <a className="transition hover:text-brand" href="#descargar">
-              Descargar
-            </a>
-            <Link className="transition hover:text-brand" href="/login">
-              Acceso docente
-            </Link>
-          </div>
-          <p className="text-sm text-muted">Lectura Aumentada · Educación con sentido</p>
+      <footer className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-4 px-6 py-8 text-[15px] font-semibold leading-5 text-[#637083]">
+        <span>© 2026 Lectura Aumentada</span>
+        <div className="flex flex-wrap gap-2 gap-x-6">
+          <a className="py-2.5" href="#">
+            Privacidad
+          </a>
+          <a className="py-2.5" href="#">
+            Contacto
+          </a>
         </div>
       </footer>
     </div>
