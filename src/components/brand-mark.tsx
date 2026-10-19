@@ -14,7 +14,7 @@ export function BrandMark({
   return (
     <div className="flex items-center gap-3" aria-label="Lectura Aumentada">
       <Image
-        src="/logo-lectura-aumentada.svg"
+        src="/logo-lectura-aumentada.png"
         width={116}
         height={116}
         alt=""

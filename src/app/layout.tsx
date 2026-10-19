@@ -52,9 +52,9 @@ export const metadata: Metadata = {
     images: ["/og.jpg"],
   },
   icons: {
-    icon: "/logo-lectura-aumentada.svg",
-    shortcut: "/logo-lectura-aumentada.svg",
-    apple: "/logo-lectura-aumentada.svg",
+    icon: "/logo-lectura-aumentada.png",
+    shortcut: "/logo-lectura-aumentada.png",
+    apple: "/logo-lectura-aumentada.png",
   },
 };
 
