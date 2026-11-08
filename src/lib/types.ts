@@ -239,6 +239,53 @@ export type ArModel = {
   model_3d: string;
 };
 
+export type LiveDomanCard = {
+  id: string;
+  word?: string;
+  display_text?: string;
+  category_id: string;
+  status: "active" | "archived";
+  audio_url?: string;
+};
+
+export type LiveDomanRepertoire = {
+  id: string;
+  name: string;
+  category_id: string;
+  status: "active" | "archived";
+  card_ids?: string[];
+};
+
+export type LiveDomanSession = {
+  id: string;
+  group_id: string;
+  repertoire_id: string;
+  group_snapshot?: {
+    name?: string;
+    student_ids?: string[];
+  };
+  repertoire_snapshot?: {
+    name?: string;
+    cards?: Array<{
+      position: number;
+      card_id: string;
+      display_text: string;
+      audio_url?: string;
+    }>;
+  };
+  presentation?: {
+    pacing?: "teacher_controlled" | "timed";
+    display_ms?: number;
+    audio_policy?: string;
+  };
+  status: "lobby" | "running" | "paused" | "ended" | "cancelled" | "expired";
+  active_card_index: number | null;
+  presentation_sequence: number;
+  created_at?: string;
+  started_at?: string;
+  ended_at?: string;
+};
+
 export const MARKERS = [
   { id: "demo-animales-gato", name: "Hiro" },
   { id: "demo-animales-perro", name: "Kanji" },
