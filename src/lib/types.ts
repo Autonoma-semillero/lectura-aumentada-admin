@@ -278,6 +278,7 @@ export type LiveDomanSession = {
     display_ms?: number;
     audio_policy?: string;
   };
+  experience_mode?: "standard" | "vr";
   status: "lobby" | "running" | "paused" | "ended" | "cancelled" | "expired";
   active_card_index: number | null;
   presentation_sequence: number;

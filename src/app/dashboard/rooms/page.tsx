@@ -8,6 +8,8 @@ import {
   CircleStop,
   Clock3,
   FastForward,
+  Glasses,
+  LayoutPanelTop,
   LoaderCircle,
   Pause,
   Play,
@@ -48,6 +50,7 @@ export default function RoomsPage() {
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [pacing, setPacing] = useState<"teacher_controlled" | "timed">("teacher_controlled");
   const [displayMs, setDisplayMs] = useState(3000);
+  const [experienceMode, setExperienceMode] = useState<"standard" | "vr">("standard");
   const [isCreating, setIsCreating] = useState(false);
   const [busyRoomId, setBusyRoomId] = useState<string | null>(null);
 
@@ -172,6 +175,7 @@ export default function RoomsPage() {
           repertoire_id: repertoire.id,
           pacing,
           display_ms: pacing === "timed" ? displayMs : 3000,
+          experience_mode: experienceMode,
         }),
       });
       await apiFetch<LiveDomanSession>(`doman/live-sessions/${room.id}/commands`, {
@@ -298,6 +302,19 @@ export default function RoomsPage() {
                 </Field>
               )}
 
+              <fieldset>
+                <legend className="mb-2 text-sm font-extrabold text-ink">Experiencia del estudiante</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <ChoiceButton selected={experienceMode === "standard"} onClick={() => setExperienceMode("standard")} icon={LayoutPanelTop} label="Tarjetas" />
+                  <ChoiceButton selected={experienceMode === "vr"} onClick={() => setExperienceMode("vr")} icon={Glasses} label="VR" />
+                </div>
+                <p className="mt-2 text-sm leading-5 text-muted">
+                  {experienceMode === "vr"
+                    ? "Abre la cámara y presenta cada palabra en la experiencia inmersiva del dispositivo."
+                    : "Muestra cada palabra como una tarjeta clara, sin solicitar acceso a la cámara."}
+                </p>
+              </fieldset>
+
               <button
                 type="submit"
                 disabled={isCreating || !groupId || !categoryId || selectedCardIds.length === 0}
@@ -394,6 +411,10 @@ function RoomCard({ room, busy, onCommand }: { room: LiveDomanSession; busy: boo
         <div>
           <div className="flex items-center gap-2">
             <StatusPill status={room.status} />
+            <span className="inline-flex items-center gap-1 rounded-full bg-canvas px-2.5 py-1 text-xs font-extrabold text-muted">
+              {room.experience_mode === "vr" ? <Glasses className="size-3.5" /> : <LayoutPanelTop className="size-3.5" />}
+              {room.experience_mode === "vr" ? "VR" : "Tarjetas"}
+            </span>
             <span className="text-xs font-bold text-muted">Secuencia {room.presentation_sequence}</span>
           </div>
           <h3 className="mt-3 text-xl font-black text-ink">{room.group_snapshot?.name ?? "Grupo"}</h3>
