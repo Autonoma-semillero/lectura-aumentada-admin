@@ -17,17 +17,23 @@ type CardDraft = {
   markerId: string;
 };
 
+const FEMALE_VOICE_EMBEDDING_URL =
+  "https://huggingface.co/onnx-community/Supertonic-TTS-2-ONNX/resolve/main/voices/F1.bin";
+
 let spanishSpeechSynthesizer: ReturnType<typeof loadSpanishSpeechSynthesizer> | undefined;
 
 async function loadSpanishSpeechSynthesizer() {
   const { pipeline } = await import("@huggingface/transformers");
-  return pipeline("text-to-speech", "Xenova/mms-tts-spa", { dtype: "q8" });
+  return pipeline("text-to-speech", "onnx-community/Supertonic-TTS-2-ONNX");
 }
 
 async function generateAudioFile(word: string): Promise<File> {
   spanishSpeechSynthesizer ??= loadSpanishSpeechSynthesizer();
   const synthesizer = await spanishSpeechSynthesizer;
-  const output = await synthesizer(word);
+  const output = await synthesizer(`<es>${word}</es>`, {
+    speaker_embeddings: FEMALE_VOICE_EMBEDDING_URL,
+    num_inference_steps: 5,
+  });
   if (Array.isArray(output)) throw new Error("El modelo devolvió un audio inesperado.");
   return new File([output.toBlob()], `${word}.wav`, { type: "audio/wav" });
 }
@@ -48,7 +54,11 @@ export default function CardsPage() {
   function playAudio(card: LiveDomanCard) {
     if (!card.audio_url) return;
     if (playingCardId === card.id) return;
-    const audio = new Audio(card.audio_url);
+    const needsProxy = /^https:\/\/drive\.(google|usercontent\.google)\.com\//.test(card.audio_url);
+    const source = needsProxy
+      ? `/api/audio/proxy?url=${encodeURIComponent(card.audio_url)}`
+      : card.audio_url;
+    const audio = new Audio(source);
     setPlayingCardId(card.id);
     const stop = () => setPlayingCardId((current) => (current === card.id ? null : current));
     audio.addEventListener("ended", stop);
