@@ -1041,5 +1041,5 @@ function normalize(value: string): string {
 }
 
 function userName(user: User): string {
-  return user.display_name ?? user.username ?? user.email;
+  return user.display_name ?? user.username ?? user.email ?? user.id;
 }

@@ -1679,7 +1679,7 @@ function CategoryWordsPreview({
 }
 
 function studentAudienceLabel(item: StudentAudienceItem): string {
-  return item.display_name || item.username || item.email;
+  return item.display_name || item.username || item.email || item.id;
 }
 
 function groupAudienceLabel(item: GroupAudienceItem): string {

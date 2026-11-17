@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Search, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
+import { KeyRound, Search, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui-kit";
 import { apiFetch } from "@/lib/api-client";
 import type { User } from "@/lib/types";
@@ -30,6 +30,10 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [revealedPin, setRevealedPin] = useState<{ name: string; pin: string } | null>(null);
+  const [pinDraftId, setPinDraftId] = useState<string | null>(null);
+  const [pinDraftValue, setPinDraftValue] = useState("");
+  const [isSavingPin, setIsSavingPin] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setError(null);
@@ -48,7 +52,7 @@ export default function UsersPage() {
     const normalized = query.trim().toLocaleLowerCase("es");
     if (!normalized) return users ?? [];
     return (users ?? []).filter((user) =>
-      `${user.display_name ?? ""} ${user.username ?? ""} ${user.email} ${user.roles.join(" ")}`
+      `${user.display_name ?? ""} ${user.username ?? ""} ${user.email ?? ""} ${user.roles.join(" ")}`
         .toLocaleLowerCase("es")
         .includes(normalized),
     );
@@ -65,7 +69,7 @@ export default function UsersPage() {
         body: JSON.stringify({
           display_name: form.displayName.trim() || undefined,
           username: form.username.trim(),
-          email: form.email.trim(),
+          email: form.role === "teacher" ? form.email.trim() : undefined,
           password: form.password,
           roles: [form.role],
           status: "active",
@@ -73,13 +77,45 @@ export default function UsersPage() {
           metadata: {},
         }),
       });
+      const name = created.display_name ?? created.username ?? created.email ?? "Estudiante";
+      const pin = form.role === "student" ? form.studentPin.trim() : "";
       setForm(initialForm);
-      setNotice(`${created.display_name ?? created.username ?? created.email} fue creado correctamente.`);
+      setNotice(`${name} fue creado correctamente.`);
+      if (pin) setRevealedPin({ name, pin });
       await loadUsers();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible crear el usuario.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  function startPinChange(userId: string) {
+    setRevealedPin(null);
+    setPinDraftValue("");
+    setPinDraftId(userId);
+  }
+
+  async function savePin(user: User) {
+    const pin = pinDraftValue.trim();
+    if (!/^\d{4,6}$/.test(pin)) {
+      setError("El PIN debe tener entre 4 y 6 dígitos.");
+      return;
+    }
+    setIsSavingPin(true);
+    setError(null);
+    try {
+      await apiFetch(`users/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ student_pin: pin }),
+      });
+      setRevealedPin({ name: user.display_name ?? user.username ?? user.email ?? "Estudiante", pin });
+      setPinDraftId(null);
+      setPinDraftValue("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No fue posible actualizar el PIN.");
+    } finally {
+      setIsSavingPin(false);
     }
   }
 
@@ -96,6 +132,17 @@ export default function UsersPage() {
         <p className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-700">
           {notice}
         </p>
+      )}
+      {revealedPin && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          <span>
+            PIN de {revealedPin.name}: <span className="font-mono text-lg tracking-widest">{revealedPin.pin}</span>
+            {" "}— anótalo o dáselo al estudiante ahora, no se mostrará de nuevo.
+          </span>
+          <button type="button" onClick={() => setRevealedPin(null)} className="text-xs font-extrabold uppercase text-amber-700 hover:underline">
+            Ocultar
+          </button>
+        </div>
       )}
 
       <section className="grid gap-6 xl:grid-cols-[0.78fr_1.22fr]">
@@ -145,18 +192,20 @@ export default function UsersPage() {
                 required
               />
             </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-bold text-white/80">Correo electrónico</span>
-              <input
-                className="field border-0"
-                type="email"
-                value={form.email}
-                onChange={(event) => setForm({ ...form, email: event.target.value })}
-                placeholder="ana@colegio.edu"
-                autoComplete="email"
-                required
-              />
-            </label>
+            {form.role === "teacher" && (
+              <label className="block space-y-2">
+                <span className="text-sm font-bold text-white/80">Correo electrónico</span>
+                <input
+                  className="field border-0"
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm({ ...form, email: event.target.value })}
+                  placeholder="ana@colegio.edu"
+                  autoComplete="email"
+                  required
+                />
+              </label>
+            )}
             <label className="block space-y-2">
               <span className="text-sm font-bold text-white/80">Contraseña temporal</span>
               <input
@@ -224,14 +273,14 @@ export default function UsersPage() {
                 >
                   <div className="flex items-start gap-4">
                     <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-brand-soft font-black text-brand">
-                      {(user.display_name ?? user.username ?? user.email).slice(0, 1).toUpperCase()}
+                      {(user.display_name ?? user.username ?? user.email ?? "?").slice(0, 1).toUpperCase()}
                     </span>
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate font-extrabold text-ink">
-                        {user.display_name ?? user.username ?? user.email}
+                        {user.display_name ?? user.username ?? user.email ?? "Sin nombre"}
                       </h3>
                       <p className="truncate text-sm font-semibold text-muted">@{user.username ?? "sin-usuario"}</p>
-                      <p className="truncate text-sm text-muted">{user.email}</p>
+                      {user.email && <p className="truncate text-sm text-muted">{user.email}</p>}
                     </div>
                   </div>
                   <div className="mt-4 flex items-center justify-between border-t border-line pt-4">
@@ -242,6 +291,48 @@ export default function UsersPage() {
                       {user.status === "disabled" ? "Deshabilitado" : user.status === "pending" ? "Pendiente" : "Activo"}
                     </span>
                   </div>
+                  {primaryRole === "student" && (
+                    <div className="mt-3 border-t border-line pt-3">
+                      {pinDraftId === user.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            className="field h-10 flex-1 text-sm"
+                            value={pinDraftValue}
+                            onChange={(event) => setPinDraftValue(event.target.value)}
+                            placeholder="Nuevo PIN (4 a 6 dígitos)"
+                            inputMode="numeric"
+                            pattern="\d{4,6}"
+                            minLength={4}
+                            maxLength={6}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void savePin(user)}
+                            disabled={isSavingPin}
+                            className="h-10 rounded-xl bg-brand px-3 text-xs font-extrabold text-white disabled:opacity-60"
+                          >
+                            Guardar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPinDraftId(null)}
+                            className="h-10 rounded-xl px-2 text-xs font-bold text-muted"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startPinChange(user.id)}
+                          className="inline-flex items-center gap-1.5 text-xs font-extrabold text-brand hover:underline"
+                        >
+                          <KeyRound className="size-3.5" /> Cambiar PIN
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </article>
               );
             })}

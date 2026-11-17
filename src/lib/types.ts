@@ -2,7 +2,7 @@ export type Student = {
   id: string;
   displayName?: string;
   display_name?: string;
-  email: string;
+  email?: string;
 };
 
 export type StudentAudienceItem = {
@@ -10,7 +10,7 @@ export type StudentAudienceItem = {
   audience_key: string;
   id: string;
   display_name?: string;
-  email: string;
+  email?: string;
   username?: string;
   group_ids: string[];
   unassigned: boolean;
@@ -48,7 +48,7 @@ export type StudentGroup = {
 
 export type User = {
   id: string;
-  email: string;
+  email?: string;
   username?: string;
   display_name?: string;
   roles: Array<"student" | "teacher" | "admin">;
@@ -293,5 +293,5 @@ export const MARKERS = [
 ] as const;
 
 export function studentName(student: Student): string {
-  return student.displayName ?? student.display_name ?? student.email;
+  return student.displayName ?? student.display_name ?? student.email ?? student.id;
 }
