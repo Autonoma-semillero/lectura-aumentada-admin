@@ -246,6 +246,8 @@ export type LiveDomanCard = {
   category_id: string;
   status: "active" | "archived";
   audio_url?: string;
+  learning_unit_id?: string;
+  sharing_scope?: "owner_only" | "shared";
 };
 
 export type LiveDomanRepertoire = {

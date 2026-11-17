@@ -4,12 +4,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Archive, Box, Edit3, Plus, Search, Sparkles, Upload, Volume2 } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState, Modal, PageHeader, StatusBadge } from "@/components/ui-kit";
 import { apiFetch } from "@/lib/api-client";
-import type { ArModel, Category, Student, WordCard } from "@/lib/types";
-import { MARKERS, studentName } from "@/lib/types";
+import type { ArModel, Category, LiveDomanCard } from "@/lib/types";
+import { MARKERS } from "@/lib/types";
 
 type CardDraft = {
   id?: string;
-  studentId: string;
   categoryId: string;
   word: string;
   audioUrl: string;
@@ -34,11 +33,10 @@ async function generateAudioFile(word: string): Promise<File> {
 }
 
 export default function CardsPage() {
-  const [students, setStudents] = useState<Student[] | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Category[] | null>(null);
   const [models, setModels] = useState<ArModel[]>([]);
   const [categoryId, setCategoryId] = useState("");
-  const [cards, setCards] = useState<WordCard[] | null>(null);
+  const [cards, setCards] = useState<LiveDomanCard[] | null>(null);
   const [draft, setDraft] = useState<CardDraft | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -49,12 +47,10 @@ export default function CardsPage() {
   async function loadFilters() {
     setError(null);
     try {
-      const [nextStudents, nextCategories, nextModels] = await Promise.all([
-        apiFetch<Student[]>("docente/students"),
+      const [nextCategories, nextModels] = await Promise.all([
         apiFetch<Category[]>("categories"),
         apiFetch<ArModel[]>("assets/models"),
       ]);
-      setStudents(nextStudents);
       setCategories(nextCategories);
       setModels(nextModels);
       setCategoryId((value) => value || nextCategories[0]?.id || "");
@@ -64,49 +60,36 @@ export default function CardsPage() {
   }
 
   const loadCards = useCallback(async () => {
-    if (!categoryId) {
-      setCards([]);
-      return;
-    }
     setCards(null);
     setError(null);
     try {
-      setCards(await apiFetch<WordCard[]>(`categories/${categoryId}/word-cards`));
+      setCards(await apiFetch<LiveDomanCard[]>("doman/cards"));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible cargar las tarjetas.");
     }
-  }, [categoryId]);
+  }, []);
 
   useEffect(() => { void Promise.resolve().then(loadFilters); }, []);
   useEffect(() => { void Promise.resolve().then(loadCards); }, [loadCards]);
 
   const visibleCards = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("es");
-    return cards?.filter((card) => card.word.toLocaleLowerCase("es").includes(normalized)) ?? [];
-  }, [cards, query]);
-
-  const studentsById = useMemo(() => {
-    const map = new Map<string, Student>();
-    students?.forEach((student) => map.set(student.id, student));
-    return map;
-  }, [students]);
-
-  function ownerName(card: WordCard): string {
-    const owner = studentsById.get(card.student_id);
-    return owner ? studentName(owner) : "Estudiante desconocido";
-  }
+    return cards?.filter((card) => {
+      const text = (card.word ?? card.display_text ?? "").toLocaleLowerCase("es");
+      return card.category_id === categoryId && text.includes(normalized);
+    }) ?? [];
+  }, [cards, query, categoryId]);
 
   function newDraft(): CardDraft {
-    return { studentId: students?.[0]?.id ?? "", categoryId, word: "", audioUrl: "", audioSource: "generated", learningUnitId: "", markerId: "" };
+    return { categoryId, word: "", audioUrl: "", audioSource: "generated", learningUnitId: "", markerId: "" };
   }
 
-  function editDraft(card: WordCard): CardDraft {
+  function editDraft(card: LiveDomanCard): CardDraft {
     const model = models.find((item) => item.learning_unit_id === card.learning_unit_id);
     return {
       id: card.id,
-      studentId: card.student_id,
       categoryId: card.category_id ?? categoryId,
-      word: card.word,
+      word: card.word ?? card.display_text ?? "",
       audioUrl: card.audio_url ?? "",
       audioSource: "manual",
       learningUnitId: model?.learning_unit_id ?? "",
@@ -166,13 +149,13 @@ export default function CardsPage() {
         });
       }
       const payload = {
-        ...(draft.id ? {} : { student_id: draft.studentId }),
         word: draft.word.trim(),
         category_id: draft.categoryId,
+        ...(draft.id ? {} : { sharing_scope: "owner_only" as const }),
         ...(audioUrl ? { audio_url: audioUrl } : {}),
         ...(model ? { learning_unit_id: model.learning_unit_id } : {}),
       };
-      await apiFetch(draft.id ? `word-cards/${draft.id}` : "word-cards", {
+      await apiFetch(draft.id ? `doman/cards/${draft.id}` : "doman/cards", {
         method: draft.id ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
@@ -185,10 +168,11 @@ export default function CardsPage() {
     }
   }
 
-  async function archive(card: WordCard) {
-    if (!window.confirm(`¿Archivar la tarjeta “${card.word}”?`)) return;
+  async function archive(card: LiveDomanCard) {
+    const label = card.word ?? card.display_text ?? "";
+    if (!window.confirm(`¿Archivar la tarjeta “${label}”?`)) return;
     try {
-      await apiFetch(`word-cards/${card.id}`, { method: "PATCH", body: JSON.stringify({ status: "archived" }) });
+      await apiFetch(`doman/cards/${card.id}`, { method: "PATCH", body: JSON.stringify({ status: "archived" }) });
       await loadCards();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible archivar la tarjeta.");
@@ -197,43 +181,44 @@ export default function CardsPage() {
 
   return (
     <div className="space-y-7">
-      <PageHeader eyebrow="Contenido" title="Tarjetas de palabras" description="Asigna palabras, pronunciación y experiencias 3D a cada estudiante." action={<button className="inline-flex h-12 items-center gap-2 rounded-2xl bg-brand px-5 font-extrabold text-white disabled:opacity-50" onClick={() => setDraft(newDraft())} disabled={!categoryId}><Plus className="size-5" /> Nueva tarjeta</button>} />
+      <PageHeader eyebrow="Contenido" title="Tarjetas de palabras" description="Crea palabras, pronunciación y experiencias 3D para tus salas en vivo." action={<button className="inline-flex h-12 items-center gap-2 rounded-2xl bg-brand px-5 font-extrabold text-white disabled:opacity-50" onClick={() => setDraft(newDraft())} disabled={!categoryId}><Plus className="size-5" /> Nueva tarjeta</button>} />
 
       <section className="grid gap-4 rounded-[26px] border border-line bg-white p-5 md:grid-cols-[1fr_1.2fr]">
-        <label className="space-y-2"><span className="text-sm font-bold text-ink-soft">Temática</span><select className="field" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+        <label className="space-y-2"><span className="text-sm font-bold text-ink-soft">Temática</span><select className="field" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories?.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
         <label className="space-y-2"><span className="text-sm font-bold text-ink-soft">Buscar palabra</span><span className="relative block"><Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-400" /><input className="field pl-12" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ej. gato" /></span></label>
       </section>
 
-      {!students && !error && <LoadingState label="Cargando contenido…" />}
-      {students && cards === null && !error && <LoadingState label="Cargando tarjetas…" />}
+      {!categories && !error && <LoadingState label="Cargando contenido…" />}
+      {categories && cards === null && !error && <LoadingState label="Cargando tarjetas…" />}
       {error && <ErrorState message={error} onRetry={loadFilters} />}
       {cards && visibleCards.length === 0 && <EmptyState title="No hay tarjetas aquí" description="Crea una tarjeta para esta temática." />}
 
       {visibleCards.length > 0 && (
         <section className="overflow-hidden rounded-[28px] border border-line bg-white shadow-[0_10px_35px_rgba(15,23,42,0.04)]">
-          <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.7fr_auto] gap-4 border-b border-line bg-slate-50 px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-muted md:grid">
-            <span>Palabra</span><span>Estudiante</span><span>Estado</span><span>Práctica</span><span>Recursos</span><span>Acciones</span>
+          <div className="hidden grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr_auto] gap-4 border-b border-line bg-slate-50 px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-muted md:grid">
+            <span>Palabra</span><span>Estado</span><span>Alcance</span><span>Recursos</span><span>Acciones</span>
           </div>
-          {visibleCards.map((card) => (
-            <article key={card.id} className="grid gap-4 border-b border-line p-5 last:border-0 md:grid-cols-[1.2fr_1fr_0.8fr_0.7fr_0.7fr_auto] md:items-center md:px-6">
-              <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-brand-soft text-lg font-black text-brand">{card.initial_letter || card.word.slice(0, 1).toUpperCase()}</span><div><strong className="block text-lg text-ink">{card.word}</strong><span className="text-xs text-muted">ID {card.id.slice(-6)}</span></div></div>
-              <div className="text-sm font-semibold text-ink">{ownerName(card)}</div>
-              <div><StatusBadge status={card.status} /></div>
-              <div className="text-sm"><strong className="block text-ink">{card.times_shown}</strong><span className="text-muted">veces vista</span></div>
-              <div className="flex gap-2 text-muted">{card.audio_url && <Volume2 className="size-5 text-action" />}{card.learning_unit_id && <Box className="size-5 text-success" />}{!card.audio_url && !card.learning_unit_id && <span className="text-sm">Sin recursos</span>}</div>
-              <div className="flex gap-2"><button className="grid size-10 place-items-center rounded-xl bg-action-soft text-action" onClick={() => setDraft(editDraft(card))} aria-label={`Editar ${card.word}`}><Edit3 className="size-4" /></button><button className="grid size-10 place-items-center rounded-xl bg-red-50 text-brand" onClick={() => archive(card)} aria-label={`Archivar ${card.word}`}><Archive className="size-4" /></button></div>
-            </article>
-          ))}
+          {visibleCards.map((card) => {
+            const label = card.word ?? card.display_text ?? "";
+            return (
+              <article key={card.id} className="grid gap-4 border-b border-line p-5 last:border-0 md:grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr_auto] md:items-center md:px-6">
+                <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-brand-soft text-lg font-black text-brand">{label.slice(0, 1).toUpperCase()}</span><div><strong className="block text-lg text-ink">{label}</strong><span className="text-xs text-muted">ID {card.id.slice(-6)}</span></div></div>
+                <div><StatusBadge status={card.status} /></div>
+                <div className="text-sm font-semibold text-ink">{card.sharing_scope === "shared" ? "Compartida" : "Mío"}</div>
+                <div className="flex gap-2 text-muted">{card.audio_url && <Volume2 className="size-5 text-action" />}{card.learning_unit_id && <Box className="size-5 text-success" />}{!card.audio_url && !card.learning_unit_id && <span className="text-sm">Sin recursos</span>}</div>
+                <div className="flex gap-2"><button className="grid size-10 place-items-center rounded-xl bg-action-soft text-action" onClick={() => setDraft(editDraft(card))} aria-label={`Editar ${label}`}><Edit3 className="size-4" /></button><button className="grid size-10 place-items-center rounded-xl bg-red-50 text-brand" onClick={() => archive(card)} aria-label={`Archivar ${label}`}><Archive className="size-4" /></button></div>
+              </article>
+            );
+          })}
         </section>
       )}
 
       {draft && (
         <Modal title={draft.id ? "Editar tarjeta" : "Nueva tarjeta"} onClose={() => setDraft(null)}>
           <form className="space-y-4" onSubmit={save}>
-            {!draft.id && <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Estudiante</span><select className="field" value={draft.studentId} onChange={(event) => setDraft({ ...draft, studentId: event.target.value })}>{students?.map((student) => <option key={student.id} value={student.id}>{studentName(student)}</option>)}</select></label>}
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Palabra</span><input className="field text-xl font-black uppercase text-brand" value={draft.word} onChange={(event) => setDraft({ ...draft, word: event.target.value.slice(0, 15) })} required /></label>
-              <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Temática</span><select className="field" value={draft.categoryId} onChange={(event) => setDraft({ ...draft, categoryId: event.target.value })}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+              <label className="block space-y-2"><span className="text-sm font-bold text-ink-soft">Temática</span><select className="field" value={draft.categoryId} onChange={(event) => setDraft({ ...draft, categoryId: event.target.value })}>{categories?.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
             </div>
             <div className="rounded-[22px] bg-canvas p-4">
               <strong className="text-sm text-ink-soft">Pronunciación</strong>

@@ -9,15 +9,12 @@ import {
   CalendarCheck2,
   Shapes,
   Sparkles,
-  Users,
 } from "lucide-react";
 import { ErrorState, LoadingState, PageHeader } from "@/components/ui-kit";
 import { apiFetch } from "@/lib/api-client";
-import type { ArModel, Category, Student } from "@/lib/types";
-import { studentName } from "@/lib/types";
+import type { ArModel, Category } from "@/lib/types";
 
 type DashboardData = {
-  students: Student[];
   categories: Category[];
   models: ArModel[];
 };
@@ -29,12 +26,11 @@ export default function DashboardPage() {
   async function load() {
     setError(null);
     try {
-      const [students, categories, models] = await Promise.all([
-        apiFetch<Student[]>("docente/students"),
+      const [categories, models] = await Promise.all([
         apiFetch<Category[]>("categories"),
         apiFetch<ArModel[]>("assets/models"),
       ]);
-      setData({ students, categories, models });
+      setData({ categories, models });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible cargar el resumen.");
     }
@@ -50,7 +46,6 @@ export default function DashboardPage() {
 
   const cardsCount = data.categories.reduce((sum, category) => sum + (category.word_cards_count ?? 0), 0);
   const metrics = [
-    { label: "Estudiantes", value: data.students.length, icon: Users, color: "bg-brand text-white", href: "/dashboard/students" },
     { label: "Temáticas", value: data.categories.length, icon: Shapes, color: "bg-action text-white", href: "/dashboard/themes" },
     { label: "Tarjetas", value: cardsCount, icon: BookOpenText, color: "bg-amber-300 text-amber-950", href: "/dashboard/cards" },
     { label: "Modelos 3D", value: data.models.length, icon: Box, color: "bg-green-500 text-white", href: "/dashboard/models" },
@@ -85,33 +80,8 @@ export default function DashboardPage() {
         })}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <article className="rounded-[30px] border border-line bg-white p-6 shadow-[0_10px_35px_rgba(15,23,42,0.04)] sm:p-7">
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-black text-ink">Estudiantes</h2>
-              <p className="mt-1 text-sm text-muted">Acceso rápido a seguimiento y planes.</p>
-            </div>
-            <Link className="text-sm font-extrabold text-brand" href="/dashboard/students">Ver todos</Link>
-          </div>
-          <div className="space-y-3">
-            {data.students.slice(0, 5).map((student, index) => (
-              <Link key={student.id} href={`/dashboard/students/${student.id}`} className="flex items-center gap-4 rounded-2xl border border-transparent p-3 transition hover:border-brand-soft hover:bg-canvas">
-                <span className={`grid size-11 place-items-center rounded-full font-black text-white ${["bg-brand", "bg-action", "bg-violet-500", "bg-emerald-500"][index % 4]}`}>
-                  {studentName(student).slice(0, 1).toUpperCase()}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <strong className="block truncate text-[0.95rem] text-ink">{studentName(student)}</strong>
-                  <span className="block truncate text-sm text-muted">{student.email}</span>
-                </span>
-                <ArrowRight className="size-4 text-slate-300" />
-              </Link>
-            ))}
-            {data.students.length === 0 && <p className="py-8 text-center text-sm text-muted">Aún no hay estudiantes registrados.</p>}
-          </div>
-        </article>
-
-        <article className="relative overflow-hidden rounded-[30px] bg-brand p-7 text-white shadow-[0_16px_45px_rgba(229,55,52,0.24)]">
+      <section className="grid gap-6">
+        <article className="relative max-w-xl overflow-hidden rounded-[30px] bg-brand p-7 text-white shadow-[0_16px_45px_rgba(229,55,52,0.24)]">
           <div className="absolute -right-12 -top-12 size-52 rounded-full border-[42px] border-white/10" />
           <div className="relative">
             <span className="grid size-12 place-items-center rounded-2xl bg-white/15"><CalendarCheck2 className="size-6" /></span>
