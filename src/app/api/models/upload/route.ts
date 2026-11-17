@@ -47,11 +47,13 @@ export async function POST(request: Request) {
   const safeName = model.name.replace(/[^a-zA-Z0-9._-]/g, "-");
   const storageName = `${crypto.randomUUID()}-${safeName}`;
 
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  if (process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID) {
     const blob = await put(`models/${storageName}`, Buffer.from(bytes), {
       access: "public",
       contentType: "model/gltf-binary",
-      token: process.env.BLOB_READ_WRITE_TOKEN,
+      ...(process.env.BLOB_READ_WRITE_TOKEN
+        ? { token: process.env.BLOB_READ_WRITE_TOKEN }
+        : {}),
     });
     return NextResponse.json({ url: blob.url, size_bytes: model.size });
   }
