@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, Box, Edit3, Plus, Search, Sparkles, Upload, Volume2 } from "lucide-react";
+import { Archive, Box, Edit3, Loader2, Plus, Search, Sparkles, Upload, Volume2 } from "lucide-react";
 import { EmptyState, ErrorState, LoadingState, Modal, PageHeader, StatusBadge } from "@/components/ui-kit";
 import { apiFetch } from "@/lib/api-client";
 import type { ArModel, Category, LiveDomanCard } from "@/lib/types";
@@ -43,6 +43,18 @@ export default function CardsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [playingCardId, setPlayingCardId] = useState<string | null>(null);
+
+  function playAudio(card: LiveDomanCard) {
+    if (!card.audio_url) return;
+    if (playingCardId === card.id) return;
+    const audio = new Audio(card.audio_url);
+    setPlayingCardId(card.id);
+    const stop = () => setPlayingCardId((current) => (current === card.id ? null : current));
+    audio.addEventListener("ended", stop);
+    audio.addEventListener("error", stop);
+    void audio.play().catch(stop);
+  }
 
   async function loadFilters() {
     setError(null);
@@ -205,7 +217,25 @@ export default function CardsPage() {
                 <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-brand-soft text-lg font-black text-brand">{label.slice(0, 1).toUpperCase()}</span><div><strong className="block text-lg text-ink">{label}</strong><span className="text-xs text-muted">ID {card.id.slice(-6)}</span></div></div>
                 <div><StatusBadge status={card.status} /></div>
                 <div className="text-sm font-semibold text-ink">{card.sharing_scope === "shared" ? "Compartida" : "Mío"}</div>
-                <div className="flex gap-2 text-muted">{card.audio_url && <Volume2 className="size-5 text-action" />}{card.learning_unit_id && <Box className="size-5 text-success" />}{!card.audio_url && !card.learning_unit_id && <span className="text-sm">Sin recursos</span>}</div>
+                <div className="flex items-center gap-2 text-muted">
+                  {card.audio_url && (
+                    <button
+                      type="button"
+                      onClick={() => playAudio(card)}
+                      disabled={playingCardId === card.id}
+                      className="grid size-8 place-items-center rounded-lg text-action transition hover:bg-action-soft disabled:cursor-wait"
+                      aria-label={`Escuchar audio de ${label}`}
+                    >
+                      {playingCardId === card.id ? (
+                        <Loader2 className="size-5 animate-spin" />
+                      ) : (
+                        <Volume2 className="size-5" />
+                      )}
+                    </button>
+                  )}
+                  {card.learning_unit_id && <Box className="size-5 text-success" />}
+                  {!card.audio_url && !card.learning_unit_id && <span className="text-sm">Sin recursos</span>}
+                </div>
                 <div className="flex gap-2"><button className="grid size-10 place-items-center rounded-xl bg-action-soft text-action" onClick={() => setDraft(editDraft(card))} aria-label={`Editar ${label}`}><Edit3 className="size-4" /></button><button className="grid size-10 place-items-center rounded-xl bg-red-50 text-brand" onClick={() => archive(card)} aria-label={`Archivar ${label}`}><Archive className="size-4" /></button></div>
               </article>
             );
