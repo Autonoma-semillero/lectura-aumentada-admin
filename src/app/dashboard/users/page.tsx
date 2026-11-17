@@ -14,6 +14,7 @@ const initialForm = {
   email: "",
   password: "",
   role: "student" as UserRole,
+  studentPin: "",
 };
 
 const roleLabel: Record<string, string> = {
@@ -68,6 +69,7 @@ export default function UsersPage() {
           password: form.password,
           roles: [form.role],
           status: "active",
+          student_pin: form.role === "student" && form.studentPin.trim() ? form.studentPin.trim() : undefined,
           metadata: {},
         }),
       });
@@ -168,6 +170,25 @@ export default function UsersPage() {
                 required
               />
             </label>
+            {form.role === "student" && (
+              <label className="block space-y-2">
+                <span className="text-sm font-bold text-white/80">PIN de acceso (opcional)</span>
+                <input
+                  className="field border-0"
+                  value={form.studentPin}
+                  onChange={(event) => setForm({ ...form, studentPin: event.target.value })}
+                  placeholder="4 a 6 dígitos"
+                  inputMode="numeric"
+                  pattern="\d{4,6}"
+                  minLength={4}
+                  maxLength={6}
+                  autoComplete="off"
+                />
+                <span className="block text-xs font-semibold text-white/60">
+                  Permite que el estudiante inicie sesión con este PIN en lugar de usuario y contraseña.
+                </span>
+              </label>
+            )}
           </div>
           <button
             className="mt-6 inline-flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-white font-extrabold text-brand transition hover:-translate-y-0.5 disabled:opacity-60"
